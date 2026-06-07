@@ -1,0 +1,6 @@
+{
+  "name": "Kuis Ujian Kelas 4 Haqi School",
+  "description": "Aplikasi kuis ujian sumatif akhir semester genap Kelas 4 Haqi School dengan bank soal acak untuk latihan mandiri.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
