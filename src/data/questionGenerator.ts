@@ -3,11 +3,31 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Question, MatchingPair } from './questions';
+import { Question } from './questions';
 
-// Simple deterministic pseudo-random generator based on index to ensure stable questions
-function getDeterministicInt(seed: number, max: number): number {
-  return Math.abs(Math.sin(seed) * 10000) % max | 0;
+const NAMES = ['Andi', 'Siti', 'Budi', 'Rian', 'Lina', 'Edo', 'Rara', 'Beni', 'Santi', 'Deni', 'Tono', 'Tini', 'Joko', 'Dewi', 'Ahmad', 'Adit', 'Nisa', 'Roni', 'Novi', 'Fajar', 'Zaki', 'Putri', 'Sari', 'Bayu', 'Gilang', 'Rendra', 'Bella', 'Indah', 'Agung', 'Maya'];
+const LOCS = ['kebun belakang', 'halaman sekolah', 'belakang rumah', 'taman bermain', 'ruang kelas 4', 'lapangan olahraga', 'teras depan', 'ruang tamu', 'kantin sekolah', 'perpustakaan', 'laboratorium', 'sungai dekat desa', 'sawah hijau', 'dapur rumah', 'kebun binatang'];
+
+function format(text: string, idx: number, val1: string | number = '', val2: string | number = ''): string {
+  const name = NAMES[idx % NAMES.length];
+  const loc = LOCS[(idx * 7) % LOCS.length];
+  return text
+    .replace(/\[NAME\]/g, name)
+    .replace(/\[LOC\]/g, loc)
+    .replace(/\[VAL1\]/g, String(val1))
+    .replace(/\[VAL2\]/g, String(val2))
+    .replace(/\[IDX\]/g, String(idx));
+}
+
+function shuffleDeterministic<T>(array: T[], seed: number): T[] {
+  const result = [...array];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.abs(seed * (i + 7) + 13) % (i + 1);
+    const temp = result[i];
+    result[i] = result[j];
+    result[j] = temp;
+  }
+  return result;
 }
 
 export function generateQuestionsForSubject(subjectId: string, startIndex: number, count: number): Question[] {
@@ -15,48 +35,37 @@ export function generateQuestionsForSubject(subjectId: string, startIndex: numbe
 
   for (let i = 0; i < count; i++) {
     const qIndex = startIndex + i;
-    const seed = qIndex * 7 + (subjectId.charCodeAt(0) || 0) * 31;
     
-    // Vary types cyclically: 0 -> menjodohkan, 1 -> isian, 2 -> uraian, 3 & 4 -> pilihan_ganda
-    const typeMod = qIndex % 5;
+    // Convert to multiple-choice (pilihan_ganda) only
     let type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian' = 'pilihan_ganda';
-    if (typeMod === 0) {
-      type = 'menjodohkan';
-    } else if (typeMod === 1) {
-      type = 'isian';
-    } else if (typeMod === 2) {
-      type = 'uraian';
-    }
 
     const id = `${subjectId}_gen_${qIndex}`;
-
-    // Delegate generation based on subjectId
     let question: Question;
+
     switch (subjectId) {
       case 'ipas':
-        question = generateIpasQuestion(id, qIndex, type, seed);
+        question = generateIpas(id, qIndex, type);
         break;
       case 'matematika':
-        question = generateMatematikaQuestion(id, qIndex, type, seed);
+        question = generateMatematika(id, qIndex, type);
         break;
       case 'bahasa_indonesia':
-        question = generateBahasaIndonesiaQuestion(id, qIndex, type, seed);
+        question = generateBahasaIndonesia(id, qIndex, type);
         break;
       case 'pancasila':
-        question = generatePancasilaQuestion(id, qIndex, type, seed);
+        question = generatePancasila(id, qIndex, type);
         break;
       case 'bahasa_inggris':
-        question = generateBahasaInggrisQuestion(id, qIndex, type, seed);
+        question = generateBahasaInggris(id, qIndex, type);
         break;
       case 'pai':
-        question = generatePaiQuestion(id, qIndex, type, seed);
+        question = generatePai(id, qIndex, type);
         break;
       case 'bahasa_arab':
-        question = generateBahasaArabQuestion(id, qIndex, type, seed);
+        question = generateBahasaArab(id, qIndex, type);
         break;
       default:
-        // Fallback to random IPAS
-        question = generateIpasQuestion(id, qIndex, 'pilihan_ganda', seed);
+        question = generateIpas(id, qIndex, 'pilihan_ganda');
     }
 
     generated.push(question);
@@ -65,811 +74,569 @@ export function generateQuestionsForSubject(subjectId: string, startIndex: numbe
   return generated;
 }
 
-// ============================================================================
-// SUBJECT SPECIFIC GENERATORS
-// ============================================================================
-
-// 1. IPAS GENERATOR
-function generateIpasQuestion(id: string, idx: number, type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian', seed: number): Question {
-  const topics = [
-    'Ekosistem Hutan', 'Gaya dan Gerak', 'Wujud Zat', 'Energi Alternatif', 
-    'Siklus Air', 'Pelestarian Lingkungan', 'Rantai Makanan', 'Fotosintesis', 
-    'Gaya Magnet', 'Konsep 3R', 'Sumber Daya Alam', 'Pancaindera'
-  ];
-  const topic = topics[idx % topics.length];
-
+// 1. IPAS GENERATOR (Sains & Sosial)
+function generateIpas(id: string, idx: number, type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian'): Question {
+  const topic = 'Pahlawan Lingkungan (Zat, Energi & Ekosistem)';
   if (type === 'pilihan_ganda') {
-    const mcqs = [
-      {
-        q: 'Manakah kegiatan di bawah ini yang paling membantu melestarikan ekosistem hutan kita?',
-        opts: ['Membakar rumput kering liar', 'Melakukan tebang pilih dan reboisasi', 'Membuka lahan sawah baru luas', 'Mengeringkan aliran rawa air'],
-        ans: 1,
-        exp: 'Tebang pilih dan reboisasi (penghijauan hutan kembali) sangat penting untuk menjaga ekosistem kayu, flora, dan fauna tetap lestari.'
-      },
-      {
-        q: 'Gaya gravitasi bumi akan menarik semua benda jatuh bebas menuju ke...',
-        opts: ['Atas awan', 'Pusat inti bumi di bawah', 'Arah matahari terbit', 'Samping barat laut'],
-        ans: 1,
-        exp: 'Gaya gravitasi merupakan gaya tarik bumi yang menarik segala benda bermassa ke arah pusat bumi.'
-      },
-      {
-        q: 'Benda yang dapat ditarik oleh magnet secara sangat kuat disebut benda...',
-        opts: ['Isolator', 'Feromagnetik', 'Termoplastik', 'Paramagnetik'],
-        ans: 1,
-        exp: 'Feromagnetik adalah klasifikasi benda (seperti besi atau baja) yang memiliki kerentanan magnetik sangat tinggi dan ditarik sangat kuat oleh magnet.'
-      },
-      {
-        q: 'Urutan siklus air setelah terjadi penguapan air laut (evaporasi) yang membentuk awan tebal karena mendingin di langit disebut...',
-        opts: ['Presipitasi', 'Transpirasi', 'Kondensasi', 'Infiltrasi'],
-        ans: 2,
-        exp: 'Kondensasi adalah proses perubahan uap air menjadi titik-titik air es di udara dingin sehingga membentuk gumpalan awan mendung.'
-      },
-      {
-        q: 'Tumbuhan hijau berproduksi sebagai produsen utama karena mampu melakukan fotosintesis yang menghasilkan oksigen dan...',
-        opts: ['Karbon dioksida', 'Glukosa (zat gula makanan)', 'Garam mineral laut', 'Gas nitrogen cair'],
-        ans: 1,
-        exp: 'Fotosintesis mengolah air dan CO2 dibantu sinar matahari dan zat hijau daun menghasilkan oksigen segar (O2) dan glukosa (karbohidrat makanan).'
-      }
-    ];
-    const mcq = mcqs[idx % mcqs.length];
-    return {
-      id,
-      subjectId: 'ipas',
-      type: 'pilihan_ganda',
-      topic,
-      questionText: `${mcq.q} (IPAS Quiz ${idx})`,
-      options: mcq.opts,
-      correctAnswer: mcq.ans,
-      explanation: mcq.exp
-    };
+    const theme = idx % 4;
+    if (theme === 0) {
+      // Wujud Zat
+      const items = [
+        ['es batu lilin', 'mencair meleleh kaku', 'padat', 'cair', 'Mencair'],
+        ['cokelat batangan', 'pecah meleleh hangat', 'padat', 'cair', 'Mencair'],
+        ['mentega gurih', 'meleleh bergoyang kuning', 'padat', 'cair', 'Mencair'],
+        ['air tawar murni', 'membeku jadi balok es', 'cair', 'padat', 'Membeku'],
+        ['adonan puding manis', 'memadat gurih mengeras', 'cair', 'padat', 'Membeku'],
+        ['air panci bergolak', 'menguap jadi asap tipis', 'cair', 'gas', 'Menguap'],
+        ['alkohol kesehatan', 'menyusut menguap kering', 'cair', 'gas', 'Menguap'],
+        ['kapur barus bundar', 'mengecil menyublim habis', 'padat', 'gas', 'Menyublim'],
+        ['uap air teh panas', 'mengembun menempel air', 'gas', 'cair', 'Mengembun']
+      ];
+      const [name, action, from, to, conc] = items[idx % items.length];
+      const q = `Di [LOC], [NAME] membiarkan ${name} hingga ${action}. Perubahan wujud dari ${from} ke ${to} ini disebut...`;
+      const opts = shuffleDeterministic([conc, 'Mencair', 'Membeku', 'Menguap', 'Menyublim', 'Mengembun'].filter((v, i, a) => a.indexOf(v) === i).slice(0, 4), idx);
+      if (opts.indexOf(conc) === -1) opts[0] = conc;
+      const finalOpts = shuffleDeterministic(opts, idx);
+      return { id, subjectId: 'ipas', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: finalOpts, correctAnswer: finalOpts.indexOf(conc), explanation: `Perubahan dari ${from} ke ${to} adalah ${conc}.` };
+    } else if (theme === 1) {
+      // Gaya & Energi
+      const items = [
+        ['bola sepak yang ditendang melambat di lapangan', 'Gaya Gesek', 'gaya hambat sentuhan dua benda'],
+        ['paku besi ditarik ujung magnet perak', 'Gaya Magnet', 'tarikan logam feromagnetik'],
+        ['penggaris digosok rambut menarik serpihan kertas', 'Gaya Listrik Statis', 'keberadaan muatan elektrostatik'],
+        ['karet ketapel ditarik dilesatkan melempar kerikil', 'Gaya Pegas', 'gaya lentur karet elastis'],
+        ['buah kelapa tua meluncur jatuh ke bawah', 'Gaya Gravitasi', 'tarikan pusat bumi'],
+        ['sendok teh ditaruh di air kopi mendidih', 'Konduksi', 'rambatan panas tanpa partikel bergerak'],
+        ['air sup berputar mendidih di panci', 'Konveksi', 'rambatan panas dengan zat mengalir'],
+        ['nyala api unggun menghangatkan tubuh', 'Radiasi', 'pancaran kalor langsung tanpa medium']
+      ];
+      const [desc, conc, exp] = items[idx % items.length];
+      const q = `Di [LOC], [NAME] melihat peristiwa: ${desc}. Konsep yang sedang bekerja di sini adalah...`;
+      const opts = shuffleDeterministic([conc, 'Gaya Gesek', 'Gaya Magnet', 'Gaya Pegas', 'Gaya Gravitasi', 'Konduksi', 'Konveksi', 'Radiasi'], idx).slice(0, 4);
+      if (opts.indexOf(conc) === -1) opts[0] = conc;
+      const finalOpts = shuffleDeterministic(opts, idx);
+      return { id, subjectId: 'ipas', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: finalOpts, correctAnswer: finalOpts.indexOf(conc), explanation: `Peristiwa ini bekerja memanfaatkan ${conc} (${exp}).` };
+    } else if (theme === 2) {
+      // Ekosistem
+      const ecos = [
+        ['sawah', 'padi', 'belalang', 'katak', 'ular'],
+        ['kebun', 'pohon mangga', 'ulat daun', 'burung pipit', 'burung elang'],
+        ['hutan', 'semak liar', 'kelinci', 'rubah', 'serigala']
+      ];
+      const [loc, p, c1, c2, c3] = ecos[idx % ecos.length];
+      const roles = [
+        [p, 'Produsen', 'menghasilkan makanan sendiri via fotosintesis'],
+        [c1, 'Konsumen Tingkat I (Herbivora)', 'memakan produsen langsung'],
+        [c2, 'Konsumen Tingkat II (Karnivora)', 'memakan konsumen tingkat I'],
+        [c3, 'Konsumen Tingkat III / Puncak', 'karnivora puncak rantai pangan']
+      ];
+      const [organ, role, desc] = roles[(idx * 3) % roles.length];
+      const q = `Dalam rantai makanan ekosistem ${loc} yang diamati [NAME] di [LOC]: ${p} -> ${c1} -> ${c2} -> ${c3}. Di sini, organisme **${organ}** bertindak sebagai...`;
+      const opts = ['Produsen', 'Konsumen Tingkat I (Herbivora)', 'Konsumen Tingkat II (Karnivora)', 'Konsumen Tingkat III / Puncak'];
+      return { id, subjectId: 'ipas', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: opts, correctAnswer: opts.indexOf(role), explanation: `${organ} adalah ${role} karena ${desc}.` };
+    } else {
+      // 3R
+      const acts = [
+        ['membawa tumblr minum pribadi ke sekolah', 'Reduce', 'mengurangi timbulan sampah plastik sekali pakai'],
+        ['menggunakan tas belanja kain tenun saat jajan', 'Reduce', 'membatasi penggunaan tas keresek plastik'],
+        ['mengubah kaleng susu bekas menjadi wadah pensil', 'Reuse', 'memfungsikan kembali barang sisa layak pakai'],
+        ['menyimpan botol kaca sirup untuk pot tanaman soka', 'Reuse', 'menggunakan wadah berulang kali tanpa meleburnya'],
+        ['menumpuk kertas bungkus bekas jadi bubur kertas hias', 'Recycle', 'mendaur ulang kertas bekas jadi produk baru'],
+        ['mengolah kulit buah ranum menjadi pupuk kompos', 'Recycle', 'mengolah bahan organik menjadi penyubur tanah']
+      ];
+      const [act, conc, exp] = acts[idx % acts.length];
+      const q = `Di [LOC], [NAME] rajin ${act}. Tindakan pelestarian lingkungan 3R ini digolongkan sebagai...`;
+      const opts = ['Reduce', 'Reuse', 'Recycle', 'Replace'];
+      return { id, subjectId: 'ipas', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: opts, correctAnswer: opts.indexOf(conc), explanation: `Urgensi tindakan ini tergolong "${conc}", yaitu ${exp}.` };
+    }
   } else if (type === 'isian') {
-    const items = [
-      { q: 'Perubahan wujud zat dari padat langsung menjadi gas tanpa mencair terlebih dahulu dinamakan...', ans: ['menyublim', 'sublimasi'] },
-      { q: 'Energi alternatif dari matahari ditangkap secara elektrik menggunakan sel...', ans: ['surya', 'solar cell', 'solar sel'] },
-      { q: 'Proses meresapnya air hujan masuk ke dalam celah-celah tanah hutan disebut...', ans: ['infiltrasi', 'penyerapan air'] }
+    const questions = [
+      ['Perubahan wujud zat padat langsung berubah ke fase gas (kapur barus [NAME] habis di lemari), disebut...', ['menyublim']],
+      ['Perubahan wujud zat gas menjadi cair (embun pagi di dekat [LOC]), disebut...', ['mengembun']],
+      ['Benda yang menghantarkan panas sangat baik seperti tembaga atau besi di [LOC], disebut...', ['konduktor']],
+      ['Benda penahan aliran panas seperti kayu gagang panci di [LOC], disebut...', ['isolator']],
+      ['Rantai makanan dimulai oleh tumbuhan berklorofil selaku...', ['produsen']],
+      ['Aksi membawa botol minum sendiri di [LOC] termasuk langkah 3R...', ['reduce']]
     ];
-    const item = items[idx % items.length];
-    return {
-      id,
-      subjectId: 'ipas',
-      type: 'isian',
-      topic,
-      questionText: `${item.q} (Soal Isian No. ${idx})`,
-      correctAnswers: item.ans,
-      placeholder: 'Isi jawaban singkat di sini...'
-    };
+    const [q, ans] = questions[idx % questions.length];
+    return { id, subjectId: 'ipas', type: 'isian', topic, questionText: format(q as string, idx), correctAnswers: ans as string[], placeholder: 'Jawab dengan satu kata huruf kecil saja...' };
   } else if (type === 'menjodohkan') {
-    const pairs = [
-      [
-        { left: 'Batu Bara', right: 'Energi Fosil Non-Alternatif' },
-        { left: 'Sinar Mentari', right: 'Energi Kelestarian Surya' },
-        { left: 'Generator Kincir', right: 'Energi Aliran Udara Angin' }
-      ],
-      [
-        { left: 'Mencair', right: 'Es Batu menjadi Air hangat' },
-        { left: 'Membeku', right: 'Air cair ditaruh di freezer kulkas' },
-        { left: 'Menguap', right: 'Air mendidih mengeluarkan asap uap' }
-      ]
+    const list = [
+      [{ left: 'Konduksi', right: 'Sendok logam tersengat kuah sup panas' }, { left: 'Konveksi', right: 'Sirkulasi air memutar saat dididihkan' }, { left: 'Radiasi', right: 'Pancaran api unggun menghangatkan badan' }],
+      [{ left: 'Membeku', right: 'Air menjadi balok es di kulkas freezer' }, { left: 'Mencair', right: 'Margarin meleleh hangat di wajan' }, { left: 'Menguap', right: 'Air menyusut mendidih jadi uap kompor' }]
     ];
-    return {
-      id,
-      subjectId: 'ipas',
-      type: 'menjodohkan',
-      topic,
-      questionText: `Jodohkan konsep perubahan zat / energi di bawah ini dengan contoh deskripsinya yang paling akurat! (Pasangan ke-${idx})`,
-      pairs: pairs[idx % pairs.length]
-    };
+    return { id, subjectId: 'ipas', type: 'menjodohkan', topic, questionText: format('Pasangkan konsep sains berikut dengan contoh yang paling tepat! (Seri: [IDX])', idx), pairs: list[idx % list.length] };
   } else {
-    // uraian
-    const essays = [
-      {
-        q: 'Sebutkan apa saja tiga jenis wujud zat di alam semesta kita, serta berikan contoh untuk masing-masing wujud tersebut!',
-        ans: 'Tiga wujud zat di alam yaitu:\n1. Zat Padat: contohnya batu, kayu, dan besi.\n2. Zat Cair: contohnya air bersih, minyak kelapa, dan kecap.\n3. Zat Gas: contohnya uap air, polusi asap pembakaran, udara oksigen dalam balon.',
-        keys: ['padat', 'cair', 'gas', 'batu', 'air', 'udara', 'oksigen']
-      },
-      {
-        q: 'Jelaskan mengapa energi alternatif kincir angin dan panel surya jauh lebih baik bagi kelangsungan ekosistem dibandingkan bahan bakar batu bara!',
-        ans: 'Kincir angin dan panel surya tidak menghasilkan gas emisi karbon dioksida yang merusak atmosfer, dapat diperbarui terus menerus tanpa habis, serta ramah lingkungan. Sebaliknya, pembakaran batu bara merusak kualitas udara, menghasilkan limbah abu berbahaya, dan penambangannya merusak tanah hutan konservasi.',
-        keys: ['karbon', 'ramah lingkungan', 'oksigen', 'batu bara', 'sumber', 'udara']
-      }
+    const list = [
+      ['Uraikan 3 pilar gerakan peduli limbah 3R dan berikan contoh nyata masing-masing!', '1. Reduce (Mengurangi): Membawa botol tumblr pribadi.\n2. Reuse (Menggunakan kembali): Memakai kaleng susu bekas sebagai wadah pensil.\n3. Recycle (Mendaur ulang): Mengolah limbah sampah dapur kering dijadikan pupuk kompos.', ['reduce', 'reuse', 'recycle', 'contoh']],
+      ['Jelaskan bagaimana proses rantai makanan berjalan di ekosistem sawah dan peran padinya!', 'Rantai makanan berupa aliran energi: Padi (Produsen) dimakan Belalang (Konsumen I), dimakan Katak (Konsumen II), dimakan Ular (Konsumen III), dan dibusukkan Jamur (Pengurai). Padi krusial karena menghasilkan energi utama fotosintesis.', ['padi', 'produsen', 'belalang', 'katak', 'ular']]
     ];
-    const essay = essays[idx % essays.length];
-    return {
-      id,
-      subjectId: 'ipas',
-      type: 'uraian',
-      topic,
-      questionText: `${essay.q} (Uraian Bebas - ${idx})`,
-      sampleAnswer: essay.ans,
-      keywords: essay.keys
-    };
+    const [q, ans, keys] = list[idx % list.length];
+    return { id, subjectId: 'ipas', type: 'uraian', topic, questionText: format(q as string, idx), sampleAnswer: ans as string, keywords: keys as string[] };
   }
 }
 
-// 2. MATEMATIKA GENERATOR
-function generateMatematikaQuestion(id: string, idx: number, type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian', seed: number): Question {
-  const topics = [
-    'Keliling Bangun Datar', 'Luas Bangun Datar', 'Sudut Lancip Tumpul', 
-    'Piktogram Hasil Panen', 'Diagram Batang Koperasi', 'Sifat Persegi Panjang', 
-    'Segitiga Sama Kaki', 'Operasi Data', 'Sumbu Simetri'
-  ];
-  const topic = topics[idx % topics.length];
-
-  // Helper variables to make questions solver-friendly and customized per idx
-  const numA = (idx * 3 + 5) % 12 + 4; // 4 to 15
-  const numB = (idx * 2 + 3) % 8 + 3;  // 3 to 10
+// 2. MATEMATIKA GENERATOR (Bangun Datar, Piktogram & Diagram Batang)
+function generateMatematika(id: string, idx: number, type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian'): Question {
+  const topic = 'Bangun Datar, Piktogram & Diagram';
+  const side = (idx * 3 % 13) + 4; // 4 to 16 cm
+  const p = (idx * 5 % 11) + 10;   // 10 to 20 cm
+  const l = (idx * 7 % 7) + 3;     // 3 to 9 cm
   
   if (type === 'pilihan_ganda') {
-    const qType = idx % 5;
-    if (qType === 0) {
-      // Keliling Persegi
-      const keliling = numA * 4;
-      return {
-        id,
-        subjectId: 'matematika',
-        type: 'pilihan_ganda',
-        topic: 'Keliling Bangun Datar',
-        questionText: `Sebuah ubin lantai berbentuk persegi presisi dengan ukuran panjang sisi tepat ${numA} cm. Berapakah keliling dari ubin lantai sekolah tersebut?`,
-        options: [
-          `${keliling - 4} cm`,
-          `${keliling} cm`,
-          `${keliling + 6} cm`,
-          `${numA * numA} cm`
-        ],
-        correctAnswer: 1,
-        explanation: `Keliling persegi = Sisi × 4 = ${numA} cm × 4 = ${keliling} cm.`
-      };
-    } else if (qType === 1) {
-      // Luas Persegi Panjang
-      const luas = numA * numB;
-      return {
-        id,
-        subjectId: 'matematika',
-        type: 'pilihan_ganda',
-        topic: 'Luas Bangun Datar',
-        questionText: `Pak Budi membeli pekarangan berbentuk persegi panjang dengan ukuran panjang ${numA} meter dan lebar ${numB} meter. Tentukanlah luas pekarangan Pak Budi!`,
-        options: [
-          `${luas + 10} m²`,
-          `${2 * (numA + numB)} m²`,
-          `${luas} m²`,
-          `${luas - 5} m²`
-        ],
-        correctAnswer: 2,
-        explanation: `Luas persegi panjang = Panjang × Lebar = ${numA} m × ${numB} m = ${luas} m².`
-      };
-    } else if (qType === 2) {
-      // Sudut lancip/tumpul
-      const besarSudut = ((idx * 15) % 95) + 35; // 35 to 125
-      const isLancip = besarSudut < 90;
-      return {
-        id,
-        subjectId: 'matematika',
-        type: 'pilihan_ganda',
-        topic: 'Sudut',
-        questionText: `Sebuah sudut diukur menggunakan busur derajat sekolah dan menunjukkan angka tepat sebesar ${besarSudut} derajat. Berdasarkan ukurannya, sudut tersebut berjenis sudut...`,
-        options: [
-          'Sudut Lancip',
-          'Sudut Siku-siku',
-          'Sudut Tumpul',
-          'Sudut Refleks'
-        ],
-        correctAnswer: isLancip ? 0 : (besarSudut === 90 ? 1 : 2),
-        explanation: `Sudut di bawah 90 derajat dinamakan sudut lancip, tepat 90 derajat dinamakan siku-siku, sedangkan di atas 90 derajat hingga di bawah 180 derajat dinamakan sudut tumpul.`
-      };
+    const cycle = idx % 5;
+    if (cycle === 0) {
+      const k = 4 * side;
+      const opts = shuffleDeterministic([`${k} cm`, `${side * side} cm`, `${2 * side} cm`, `${k + 8} cm`], idx);
+      return { id, subjectId: 'matematika', type: 'pilihan_ganda', topic, questionText: format(`[NAME] memiliki ubin persegi di [LOC] dengan sisi [VAL1] cm. Berapakah keliling ubin tersebut?`, idx, side), options: opts, correctAnswer: opts.indexOf(`${k} cm`), explanation: `Keliling persegi = Sisi × 4 = ${side} × 4 = ${k} cm.` };
+    } else if (cycle === 1) {
+      const area = p * l;
+      const opts = shuffleDeterministic([`${area} cm²`, `${2 * (p + l)} cm²`, `${p + l} cm²`, `${area + 15} cm²`], idx);
+      return { id, subjectId: 'matematika', type: 'pilihan_ganda', topic, questionText: format(`Meja belajar [NAME] di [LOC] berbentuk persegi panjang dengan panjang [VAL1] cm dan lebar [VAL2] cm. Luas meja adalah...`, idx, p, l), options: opts, correctAnswer: opts.indexOf(`${area} cm²`), explanation: `Luas persegi panjang = Panjang × Lebar = ${p} × ${l} = ${area} cm².` };
+    } else if (cycle === 2) {
+      const k = 2 * (p + l);
+      const opts = shuffleDeterministic([`${k} cm`, `${p * l} cm`, `${p + l} cm`, `${k - 6} cm`], idx);
+      return { id, subjectId: 'matematika', type: 'pilihan_ganda', topic, questionText: format(`Bingkai foto di [LOC] memiliki panjang [VAL1] cm dan lebar [VAL2] cm. Keliling bingkai milik [NAME] adalah...`, idx, p, l), options: opts, correctAnswer: opts.indexOf(`${k} cm`), explanation: `Keliling = 2 × (Panjang + Lebar) = 2 × (${p} + ${l}) = ${k} cm.` };
+    } else if (cycle === 3) {
+      const angle = (idx * 13 % 145) + 15;
+      const actAngle = angle === 90 ? 95 : angle;
+      const isLancip = actAngle < 90;
+      const correct = isLancip ? 'Sudut Lancip' : 'Sudut Tumpul';
+      const opts = shuffleDeterministic(['Sudut Lancip', 'Sudut Tumpul', 'Sudut Siku-siku', 'Sudut Refleks'], idx);
+      return { id, subjectId: 'matematika', type: 'pilihan_ganda', topic, questionText: format(`Menggunakan busur derajat di [LOC], [NAME] mengukur sudut dahan kayu sebesar [VAL1] derajat. Sudut ini termasuk...`, idx, actAngle), options: opts, correctAnswer: opts.indexOf(correct), explanation: `Sudut ${actAngle}° adalah ${correct} (Lancip < 90°, Tumpul > 90° s.d. 180°).` };
     } else {
-      // Piktogram
-      const perGambar = ((idx * 5) % 15) + 5; // 5, 10, 15 etc.
-      const totalSapi = numB;
-      const totalKuantitas = perGambar * totalSapi;
-      return {
-        id,
-        subjectId: 'matematika',
-        type: 'pilihan_ganda',
-        topic: 'Piktogram',
-        questionText: `Pada piktogram peternakan Desa Makmur: tiap 1 icon kepala sapi mewakili ${perGambar} ekor sapi asli. Jika peternakan Pak Hasan digambarkan dengan ${totalSapi} buah icon sapi, berapakah jumlah sapi asli milik Pak Hasan?`,
-        options: [
-          `${totalKuantitas - 10} ekor`,
-          `${totalKuantitas + 20} ekor`,
-          `${totalSapi} ekor`,
-          `${totalKuantitas} ekor`
-        ],
-        correctAnswer: 3,
-        explanation: `Sapi asli = Jumlah icon × representasi per icon = ${totalSapi} × ${perGambar} = ${totalKuantitas} ekor.`
-      };
+      const scale = [5, 10, 20][idx % 3];
+      const count = (idx * 2 % 6) + 3;
+      const total = count * scale;
+      const fruit = ['apel', 'mangga', 'semangka'][idx % 3];
+      const opts = shuffleDeterministic([`${total} kg`, `${count} kg`, `${total - scale} kg`, `${total + scale} kg`], idx);
+      return { id, subjectId: 'matematika', type: 'pilihan_ganda', topic, questionText: format(`Pada piktogram di [LOC], 1 icon buah melambangkan [VAL1] kg ${fruit} terjual. Jika dagangan [NAME] digambarkan dengan ${count} icon, berat buah asli terjual adalah...`, idx, scale), options: opts, correctAnswer: opts.indexOf(`${total} kg`), explanation: `Total berat = ${count} × ${scale} = ${total} kg.` };
     }
   } else if (type === 'isian') {
-    const keliling = numB * 4;
-    return {
-      id,
-      subjectId: 'matematika',
-      type: 'isian',
-      topic: 'Keliling Bangun Datar',
-      questionText: `Sebuah bingkai lukisan berbentuk persegi memiliki ukuran panjang sisi sebesar ${numB} cm. Keliling bingkai lukisan tersebut adalah ... cm.`,
-      correctAnswers: [`${keliling}`],
-      placeholder: 'Ketik angkanya saja...'
-    };
+    const cycle = idx % 3;
+    if (cycle === 0) {
+      return { id, subjectId: 'matematika', type: 'isian', topic, questionText: format(`Hiasan catur persegi milik [NAME] memiliki sisi [VAL1] cm. Keliling hiasan di [LOC] tersebut adalah ... cm.`, idx, side), correctAnswers: [String(4 * side)], placeholder: 'Tulis angkanya saja...' };
+    } else if (cycle === 1) {
+      return { id, subjectId: 'matematika', type: 'isian', topic, questionText: format(`Origami persegi miliki [NAME] bersisi [VAL1] cm. Luas origami di [LOC] ini adalah ... cm².`, idx, side), correctAnswers: [String(side * side)], placeholder: 'Tulis angkanya saja...' };
+    } else {
+      const isLancip = idx % 2 === 0;
+      const val = isLancip ? 55 : 125;
+      return { id, subjectId: 'matematika', type: 'isian', topic, questionText: format(`Sudut siku lemari di [LOC] terukur sebesar [VAL1] derajat. Jenis sudut ini kaku diklasifikasikan sebagai sudut...`, idx, val), correctAnswers: [isLancip ? 'lancip' : 'tumpul'], placeholder: 'Tulis jenis sudutnya (lancip / tumpul)...' };
+    }
   } else if (type === 'menjodohkan') {
-    const s1 = numA;
-    return {
-      id,
-      subjectId: 'matematika',
-      type: 'menjodohkan',
-      topic: 'Keliling & Luas',
-      questionText: `Jodohkan rumus-rumus di bawah ini dengan nama bangun datar atau operasi besaran matematika yang sesuai! (Sesi ${idx})`,
-      pairs: [
-        { left: 'Rumus Sisi × Sisi', right: `Sama dengan Luas Persegi` },
-        { left: 'Rumus Sisi × 4', right: `Sama dengan Keliling Persegi` },
-        { left: 'Sudut Lancip', right: 'Sudut berukuran kurang dari 90 derajat' }
-      ]
-    };
+    const pairs = [
+      { left: 'Luas Persegi', right: 'Sisi × Sisi' },
+      { left: 'Keliling Persegi', right: 'Sisi × 4' },
+      { left: 'Sudut Lancip', right: 'Sudut kurang dari 90 derajat' }
+    ];
+    return { id, subjectId: 'matematika', type: 'menjodohkan', topic, questionText: format(`Pasangkan konsep matematika di [LOC] berikut dengan rumus/arti yang cocok! (Seri: [IDX])`, idx), pairs };
   } else {
-    // uraian
-    const p = numA + 3;
-    const l = numB;
-    const kel = 2 * (p + l);
-    const lu = p * l;
-    return {
-      id,
-      subjectId: 'matematika',
-      type: 'uraian',
-      topic: 'Keliling & Luas Kombinasi',
-      questionText: `Sebuah kertas karton berukuran persegi panjang memiliki panjang ${p} cm dan lebar diukur sepanjang ${l} cm. Hitunglah keliling dan luas seluruh bidang karton tersebut secara rinci dengan menyertakan caranya!`,
-      sampleAnswer: `Cara Penyelesaian:\n1. Keliling = 2 × (Panjang + Lebar) = 2 × (${p} + ${l}) = 2 × ${p + l} = ${kel} cm.\n2. Luas = Panjang × Lebar = ${p} × ${l} = ${lu} cm².`,
-      keywords: [`${kel}`, `${lu}`, 'keliling', 'luas', 'cm']
-    };
+    const area = p * l;
+    const k = 2 * (p + l);
+    return { id, subjectId: 'matematika', type: 'uraian', topic, questionText: format(`Sebuah meja lipat di [LOC] bersisi panjang [VAL1] cm dan lebar [VAL2] cm. Hitunglah keliling dan luas area meja punya [NAME] tersebut secara detail!`, idx, p, l), sampleAnswer: `Langkah pengerjaan:\n1. Keliling = 2 × (p + l) = 2 × (${p} + ${l}) = ${k} cm.\n2. Luas = p × l = ${p} × ${l} = ${area} cm².`, keywords: [String(area), String(k), 'keliling', 'luas', 'meja'] };
   }
 }
 
-// 3. BAHASA INDONESIA GENERATOR
-function generateBahasaIndonesiaQuestion(id: string, idx: number, type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian', seed: number): Question {
-  const topics = [
-    'Lawan Kata', 'Persamaan Kata', 'Watak Tokoh', 'Fakta dan Opini', 
-    'Tanda Baca', 'Majas Metafora', 'Kosakata Kunci', 'Analisis Puisi', 'Gagasan Utama'
-  ];
-  const topic = topics[idx % topics.length];
-
-  const pairsWord = [
-    { word: 'rajin', antonym: 'malas', synonym: 'giat' },
-    { word: 'hemat', antonym: 'boros', synonym: 'irit' },
-    { word: 'cepat', antonym: 'lambat', synonym: 'lekas' },
-    { word: 'tinggi', antonym: 'rendah', synonym: 'jangkung' },
-    { word: 'pemberani', antonym: 'penakut', synonym: 'ksatria' }
-  ];
-  const itemWord = pairsWord[idx % pairsWord.length];
-
+// 3. BAHASA INDONESIA GENERATOR (Hidup Sehat, Watak Tokoh, Fakta & Opini, Tanda Baca)
+function generateBahasaIndonesia(id: string, idx: number, type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian'): Question {
+  const topic = 'Hidup Sehat (Ejaan, Fakta & Opini, Watak)';
   if (type === 'pilihan_ganda') {
-    const qType = idx % 3;
-    if (qType === 0) {
-      return {
-        id,
-        subjectId: 'bahasa_indonesia',
-        type: 'pilihan_ganda',
-        topic: 'Lawan Kata',
-        questionText: `Tono sangat suka menyisihkan sisa uang sakunya di celengan plastik sedangkan adiknya sangat suka jajan mainan mahal setiap hari. Sifat Tono adalah antonim (lawan kata) dari sifat adiknya yang...`,
-        options: [
-          'Pemalas',
-          'Sombong',
-          'Kikir',
-          'Boros'
-        ],
-        correctAnswer: 3,
-        explanation: 'Lawan kata dari Tono yang rajin menabung (hemat) adalah adiknya yang suka menghabiskan uang secara tidak bijaksana (boros).'
-      };
-    } else if (qType === 1) {
-      return {
-        id,
-        subjectId: 'bahasa_indonesia',
-        type: 'pilihan_ganda',
-        topic: 'Fakta dan Opini',
-        questionText: 'Manakah kalimat di bawah ini yang tergolong sebagai kalimat OPINI (pendapat pribadi)?',
-        options: [
-          'Bandung adalah ibu kota Provinsi Jawa Barat di Indonesia.',
-          'Pelajaran Matematika adalah pelajaran paling menakutkan bagi semua anak SD.',
-          'Indonesia memproklamasikan kemerdekaan pada tanggal 17 Agustus 1945.',
-          'Gajah adalah mamalia darat terbesar yang masih hidup saat ini.'
-        ],
-        correctAnswer: 1,
-        explanation: 'Kalimat no 2 adalah opini/pendapat pribadi, sebab tidak semua murid SD takut dengan pelajaran Matematika (sebagian sangat menyukainya).'
-      };
+    const cycle = idx % 4;
+    if (cycle === 0) {
+      // Watak Tokoh
+      const wataks = [
+        ['selalu tersenyum ramah dan mengulurkan bantuan menolong kucing terluka', 'Ramah dan suka menolong', 'perilaku ikhlas senyum menolong sesama'],
+        ['selalu memamerkan dompet saku mainannya dan enggan bekerjasama saat piket kelas', 'Sombong dan tidak peduli', 'perilaku sombong memamerkan barang dan malas'],
+        ['rajin belajar membaca buku dan teratur bangun pagi membersihkan kamar', 'Disiplin dan rajin', 'pembiasaan baik bangun pagi mandiri belajar']
+      ];
+      const [desc, watak, exp] = wataks[idx % wataks.length];
+      const q = `Bacalah penggalan drama berikut!\n"Dalam cerita yang dibaca [NAME] di [LOC], diceritakan Rian ${desc}."\nWatak kepribadian tokoh Rian adalah...`;
+      const opts = shuffleDeterministic(['Ramah dan suka menolong', 'Sombong dan tidak peduli', 'Disiplin dan rajin', 'Goyah dan pemarah'], idx);
+      if (opts.indexOf(watak) === -1) opts[0] = watak;
+      const finalOpts = shuffleDeterministic(opts, idx);
+      return { id, subjectId: 'bahasa_indonesia', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: finalOpts, correctAnswer: finalOpts.indexOf(watak), explanation: `Urgensi perangai tokoh sesuai KBBI adalah ${watak} (${exp}).` };
+    } else if (cycle === 1) {
+      // Fakta vs Opini
+      const facts = ['Negara Indonesia merdeka pada 17 Agustus 1945.', 'Kota Bandung merupakan ibu kota Provinsi Jawa Barat.', 'Matahari terbit dari ufuk timur dan terbenam di barat.'];
+      const opinions = ['Pelajaran menggambar bebas adalah pelajaran terseru.', 'Sayur sup masakan bibik kantin terasa sangat enak sekali.', 'Warna ungu cerah adalah warna terindah di dunia.'];
+      const isPickFact = idx % 2 === 0;
+      const correct = isPickFact ? facts[idx % facts.length] : opinions[idx % opinions.length];
+      const wrong = isPickFact ? opinions[idx % opinions.length] : facts[idx % facts.length];
+      const opts = shuffleDeterministic([correct, wrong, 'Menurut saya kucing adalah hewan paling jahat.', 'Membaca buku komik kartun sangat menguras otak.'], idx);
+      const q = isPickFact 
+        ? `Di [LOC], [NAME] berdiskusi. Manakah kalimat pilihan di bawah yang tergolong sebagai kalimat **FAKTA** objektif?`
+        : `Di [LOC], [NAME] membaca laporan. Manakah di bawah yang merupakan kalimat **OPINI** subjektif?`;
+      return { id, subjectId: 'bahasa_indonesia', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: opts, correctAnswer: opts.indexOf(correct), explanation: isPickFact ? `Fakta bersifat objektif universal: "${correct}".` : `Opini bersifat subjektif personal: "${correct}".` };
+    } else if (cycle === 2) {
+      // Majas
+      const majas = [
+        ['Pena milik [NAME] menari-nari riang di kertas putih.', 'Majas Personifikasi', 'seolah pena mati berbuat bertingkah hidup layaknya manusia'],
+        ['Angin malam memeluk erat tubuh [NAME] di kebun sekolah.', 'Majas Personifikasi', 'seolah angin mati memeluk layaknya pelukan manusia'],
+        ['Budi dikenal selaku bintang kelas berkat kecerdasannya.', 'Majas Metafora', 'ungkapan kiasan bintang kelas berarti juara kelas'],
+        ['Kabar kenaikan harga cabai meroket setinggi langit biru.', 'Majas Hiperbola', 'ungkapan hiperbolis berlebih-lebihan menceritakan harga']
+      ];
+      const [text, typeMajas, exp] = majas[idx % majas.length];
+      const q = `Cermati kalimat berikut!\n"[VAL1]"\nKalimat tersebut mengandung gaya bahasa...`;
+      const opts = ['Majas Personifikasi', 'Majas Metafora', 'Majas Hiperbola', 'Majas Asosiasi'];
+      return { id, subjectId: 'bahasa_indonesia', type: 'pilihan_ganda', topic, questionText: format(q, idx, text), options: opts, correctAnswer: opts.indexOf(typeMajas), explanation: `Kalimat ini mengandung ${typeMajas} (${exp}).` };
     } else {
-      return {
-        id,
-        subjectId: 'bahasa_indonesia',
-        type: 'pilihan_ganda',
-        topic: 'Majas Personifikasi',
-        questionText: 'Gaya bahasa atau majas yang memberikan sifat kemanusiaan pada benda mati seperti pada kalimat "Angin malam bisikkan pesan damai ke telingaku" dinamakan majas...',
-        options: [
-          'Majas Hiperbola',
-          'Majas Metafora',
-          'Majas Personifikasi',
-          'Majas Asosiasi'
-        ],
-        correctAnswer: 2,
-        explanation: 'Majas personifikasi adalah gaya bahasa yang membuat benda mati seolah-olah bernyawa dan berperilaku layaknya manusia (misal: angin membisiki pesan).'
-      };
+      // Sinonim Antonim
+      const words = [
+        ['hemat', 'boros', 'irit', 'Siti gemar menghemat uang kas di [LOC].'],
+        ['rajin', 'pemalas', 'giat', 'Budi dikenal belajar rajin membaca di perpustakaan.']
+      ];
+      const [word, ant, syn, sentence] = words[idx % words.length];
+      const isAskingAnt = idx % 2 === 0;
+      const q = isAskingAnt 
+        ? `Berdasarkan kalimat berikut:\n"${sentence}"\nLawan kata (antonim) dari kata miring **${word}** adalah...`
+        : `Berdasarkan kalimat berikut:\n"${sentence}"\nPersamaan kata (sinonim) dari kata miring **${word}** adalah...`;
+      const correct = isAskingAnt ? ant : syn;
+      const opts = shuffleDeterministic([correct, 'bodoh', 'lambat', 'sedih', 'kotor'], idx).slice(0, 4);
+      if (opts.indexOf(correct) === -1) opts[0] = correct;
+      const finalOpts = shuffleDeterministic(opts, idx);
+      return { id, subjectId: 'bahasa_indonesia', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: finalOpts, correctAnswer: finalOpts.indexOf(correct), explanation: isAskingAnt ? `Antonim dari "${word}" adalah "${correct}".` : `Sinonim dari "${word}" adalah "${correct}".` };
     }
   } else if (type === 'isian') {
-    return {
-      id,
-      subjectId: 'bahasa_indonesia',
-      type: 'isian',
-      topic: 'Ejaan Tanda Baca',
-      questionText: `Untuk mengakhiri sebuah kalimat tanya yang menanyakan tentang kabar atau lokasi, kita wajib memberikan tanda baca ... (tulis secara textual nama tandanya)`,
-      correctAnswers: ['tanya', 'tanda tanya'],
-      placeholder: 'Contoh: tanda seru (ketik jawabanmu)...'
-    };
+    const questions = [
+      ['Lawan kata (antonim) dari kata hemat adalah...', ['boros']],
+      ['Sinonim (persamaan kosa kata) dari kata rajin adalah...', ['giat', 'tekun']],
+      ['Latar tempat cerita Rian berlatar di taman rimbun. Kata "taman" menunjuk latar...', ['tempat']],
+      ['Untuk mengakhiri penulisan kalimat tanya yang benar, dibubuhi tanda...', ['tanya', 'tanda tanya']]
+    ];
+    const [q, ans] = questions[idx % questions.length];
+    return { id, subjectId: 'bahasa_indonesia', type: 'isian', topic, questionText: format(q as string, idx), correctAnswers: ans as string[], placeholder: 'Tulis satu kata huruf kecil saja...' };
   } else if (type === 'menjodohkan') {
-    return {
-      id,
-      subjectId: 'bahasa_indonesia',
-      type: 'menjodohkan',
-      topic: 'Lawan Kata',
-      questionText: `Jodohkan kata-kata berikut dengan lawan katanya (antonym) yang paling sesuai! (Kuis ${idx})`,
-      pairs: [
-        { left: 'Kata Rajin', right: 'Lawan katanya adalah Malas' },
-        { left: 'Kata Pemberani', right: 'Lawan katanya adalah Penakut' },
-        { left: 'Kata Pintar', right: 'Lawan katanya adalah Bodoh' }
-      ]
-    };
+    const pairs = [
+      { left: 'Fakta', right: 'Kenyataan objektif dibuktikan mutlak' },
+      { left: 'Opini', right: 'Penilaian rasa subjektif selera' },
+      { left: 'Protagonis', right: 'Tokoh berwatak budiman mulia' }
+    ];
+    return { id, subjectId: 'bahasa_indonesia', type: 'menjodohkan', topic, questionText: format(`Pasangkan padanan bahasa Indonesia dengan pasangannya yang tepat! (No: [IDX])`, idx), pairs };
   } else {
-    // uraian
-    return {
-      id,
-      subjectId: 'bahasa_indonesia',
-      type: 'uraian',
-      topic: 'Analisis Paragraf',
-      questionText: `Tuliskan perbedaan mendasar antara kalimat FAKTA dengan kalimat OPINI, serta berikan masing-masing satu kalimat contoh buatanmu sendiri!`,
-      sampleAnswer: 'Perbedaan:\n1. Fakta adalah kalimat yang menyatakan kenyataan objektif, terbukti kebenarannya secara ilmiah atau sejarah.\nContoh: Presiden pertama Indonesia adalah Ir. Soekarno.\n2. Opini adalah kalimat yang berisi pendapat, tanggapan, gagasan, atau keyakinan subjektif seseorang yang belum tentu disetujui semua orang.\nContoh: Bakso buatan Ibu saya adalah bakso terenak di dunia.',
-      keywords: ['fakta', 'opini', 'perbedaan', 'contoh', 'kenyataan', 'pendapat']
-    };
+    return { id, subjectId: 'bahasa_indonesia', type: 'uraian', topic, questionText: format(`Jelaskan perbedaan mendasar antara kalimat fakta dan kalimat opini, serta berikan masing-masing sebuah contoh bertopik hidup sehat!`, idx), sampleAnswer: `Perbedaan:\n1. Fakta: Kenyataan objektif terbukti benar universal. Contoh: Kita butuh minum air putih agar tidak dehidrasi.\n2. Opini: Pandangan subjektif rasa selera pribadi. Contoh: Masakan sop buatan ibu adalah makanan paling lezat.`, keywords: ['fakta', 'opini', 'contoh', 'perbedaan', 'sehat'] };
   }
 }
 
-// 4. PENDIDIKAN PANCASILA GENERATOR
-function generatePancasilaQuestion(id: string, idx: number, type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian', seed: number): Question {
-  const topics = [
-    'Sila-sila Pancasila', 'Gotong Royong', 'Hak dan Kewajiban', 
-    'Rumah Adat Indonesia', 'Pakaian Adat Kebaya', 'Norma Masyarakat', 
-    'Keberagaman Suku', 'Kerja Keras Pancasila'
-  ];
-  const topic = topics[idx % topics.length];
-
+// 4. PENDIDIKAN PANCASILA GENERATOR (Persatuan & Kesatuan, Budaya Gotong Royong)
+function generatePancasila(id: string, idx: number, type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian'): Question {
+  const topic = 'Pancasila, Persatuan & Gotong Royong';
   if (type === 'pilihan_ganda') {
-    const qType = idx % 4;
-    if (qType === 0) {
-      return {
-        id,
-        subjectId: 'pancasila',
-        type: 'pilihan_ganda',
-        topic: 'Lambang Sila Pancasila',
-        questionText: `Lambang Sila Ketiga dari Pancasila, yang melambangkan kerindangan perlindungan dan persatuan seluruh bangsa Indonesia, adalah...`,
-        options: [
-          'Kepala Banteng',
-          'Pohon Beringin',
-          'Padi dan Kapas',
-          'Bintang Emas'
-        ],
-        correctAnswer: 1,
-        explanation: 'Pohon Beringin dinamai sebagai perlambangan Sila ke-3, yang berbunyi "Persatuan Indonesia".'
-      };
-    } else if (qType === 1) {
-      return {
-        id,
-        subjectId: 'pancasila',
-        type: 'pilihan_ganda',
-        topic: 'Hak dan Kewajiban',
-        questionText: 'Manakah tindakan di bawah ini yang dikategorikan sebagai KEWAJIBAN utama seorang siswa di kelas?',
-        options: [
-          'Mendapat uang jajan saku mingguan',
-          'Mendengarkan penjelasan guru dengan tekun dan tertib',
-          'Memakai fasilitas taman bermain sekolah sesuka hati',
-          'Menerima buku laporan hasil belajar (rapor)'
-        ],
-        correctAnswer: 1,
-        explanation: 'Mendengarkan penjelasan guru, mengikuti upacara, dan mengerjakan piket adalah kewajiban siswa di sekolah, sedangkan fasilitas dan hasil rapor adalah hak.'
-      };
-    } else if (qType === 2) {
-      return {
-        id,
-        subjectId: 'pancasila',
-        type: 'pilihan_ganda',
-        topic: 'Gotong Royong',
-        questionText: 'Manakah kegiatan gotong royong yang biasa dilakukan di lingkungan tempat tinggal masyarakat sekitar rumah?',
-        options: [
-          'Mengerjakan soal ujian ulangan harian bersama teman sebangku',
-          'Membersihkan selokan desa bersama dalam kerja bakti',
-          'Berdiam diri di kamar mendengarkan musik',
-          'Membuat kerajinan tangan individu di rumah'
-        ],
-        correctAnswer: 1,
-        explanation: 'Kerja bakti membersihkan lingkungan, memperbaiki jembatan, dan siskamling ronda malam adalah contoh nyata gotong royong masyarakat.'
-      };
+    const cycle = idx % 4;
+    if (cycle === 0) {
+      // Sila & Lambang
+      const silas = [
+        ['Sila Pertama (1)', 'rukun beribadah merayakan hari besar beragama lain di [LOC]', 'Bintang Emas'],
+        ['Sila Kedua (2)', 'membagi bekal kue secara adil menjenguk teman kelas demam', 'Rantai Emas'],
+        ['Sila Ketiga (3)', 'memakai kaos bermotif batik nusantara buatan dalam negeri', 'Pohon Beringin'],
+        ['Sila Keempat (4)', 'ikut bermusyawarah kelompok menentukan ketua mading kelas', 'Kepala Banteng'],
+        ['Sila Kelima (5)', 'tidak bersikap boros uang saku, rajin jatah saku ditabung', 'Padi dan Kapas']
+      ];
+      const [silaNum, act, icon] = silas[idx % silas.length];
+      const q = `Sikap mulia [NAME] yang menerapkan perilakuan: ${act}. Kegiatan ini mencerminkan pengamalan Pancasila yaitu...`;
+      const correct = `${silaNum} - Lambang ${icon}`;
+      const opts = shuffleDeterministic([correct, 'Sila Pertama (1) - Lambang Bintang Emas', 'Sila Kedua (2) - Lambang Rantai Emas', 'Sila Ketiga (3) - Lambang Pohon Beringin', 'Sila Kelima (5) - Lambang Padi dan Kapas'], idx).slice(0, 4);
+      if (opts.indexOf(correct) === -1) opts[0] = correct;
+      const finalOpts = shuffleDeterministic(opts, idx);
+      return { id, subjectId: 'pancasila', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: finalOpts, correctAnswer: finalOpts.indexOf(correct), explanation: `Aksi terpuji ini mencerminkan amanat sila ${silaNum} berlambangkan ${icon}.` };
+    } else if (cycle === 1) {
+      // Hak vs Kewajiban
+      const scenarios = [
+        ['menerima materi pelajaran yang bermakna dan asyik dari ibu guru', 'Hak siswa di sekolah'],
+        ['ikut membersihkan halaman depan dengan menyapu piket terjadwal', 'Kewajiban murid di area sekolah'],
+        ['memeroleh curahan asupan buah segar dan kasih sayang rukun ayah ibu', 'Hak anak di lingkungan rumah'],
+        ['merapikan kembali selimut lipat kasur bantal sehabis bangun tidur', 'Kewajiban anak di lingkungan rumah']
+      ];
+      const [act, typeHakKew] = scenarios[idx % scenarios.length];
+      const q = `Ketika sedang di [LOC], [NAME] melakukan pembiasaan: ${act}. Tindakan ini merupakan perwujudan dari...`;
+      const opts = ['Hak siswa di sekolah', 'Kewajiban murid di area sekolah', 'Hak anak di lingkungan rumah', 'Kewajiban anak di lingkungan rumah'];
+      return { id, subjectId: 'pancasila', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: opts, correctAnswer: opts.indexOf(typeHakKew), explanation: `Melakukan aktivitas membersihkan atau menerima materi adalah wujud dari ${typeHakKew}.` };
+    } else if (cycle === 2) {
+      // Gotong Royong
+      const benefits = [
+        ['mengeruk lumpur penyumbat selokan komplek tinggal', 'Gotong Royong', 'aliran got bersih terhindar nyamuk DBD'],
+        ['mengecat papan pengumuman mading sekolah yang pudar', 'Kerja Bakti', 'informasi mading terbaca indah ceria'],
+        ['gotong royong mencabuti duri tajam semak taman bermain', 'Persatuan', 'anak balita aman berlarian bebas cedera']
+      ];
+      const [job, word, benefit] = benefits[idx % benefits.length];
+      const q = `Sekelompok warga di [LOC] dibantu [NAME] rukun bergotong-royong ${job}. Manfaat mendasar dari aksi kerja nyata ini adalah...`;
+      const correct = `Pekerjaan cepat tuntas and ${benefit}`;
+      const opts = shuffleDeterministic([correct, 'Menimbulkan perselisihan unjuk kasta materi warga', 'Bisa meminta imbalan gaji harian berlipat ganda', 'Mudah mengadakan pesta makan foya foya'], idx);
+      return { id, subjectId: 'pancasila', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: opts, correctAnswer: opts.indexOf(correct), explanation: `Urgensi gotong royong memupuk kerukunan rukun, melandasi pekerjaan lekas tuntas dan ${benefit}.` };
     } else {
-      return {
-        id,
-        subjectId: 'pancasila',
-        type: 'pilihan_ganda',
-        topic: 'Sila-sila Pancasila',
-        questionText: 'Melakukan musyawarah mufakat di lingkungan keluarga untuk menentukan tujuan liburan akhir tahun merupakan pencerminan Sila ke-...',
-        options: [
-          'Dua (2)',
-          'Tiga (3)',
-          'Empat (4)',
-          'Lima (5)'
-        ],
-        correctAnswer: 2,
-        explanation: 'Musyawarah, menghargai pendapat orang lain saat mengambil keputusan bersama merupakan pengamalan Sila ke-4 Pencasila.'
-      };
+      // Keberagaman Suku
+      const cultures = [
+        ['Rumah adat Honai berkepala rumbia jerami bundar', 'Papua'],
+        ['Seni Tari Saman bermusik pukulan dada sejajar', 'Aceh'],
+        ['Seni Tari Kecak bersyahdu suara keliling lingkar api', 'Bali'],
+        ['Rumah adat Gadang berujung runcing atap tanduk kerbau', 'Sumatera Barat'],
+        ['Alat musik Sasando petik dawai anyaman daun melingkar', 'NTT']
+      ];
+      const [item, origin] = cultures[idx % cultures.length];
+      const q = `Saat mendatangi stan budaya nusantara di [LOC], [NAME] melihat karya adat berupa: **${item}**. Karya luhur ini berasal dari daerah asli...`;
+      const opts = shuffleDeterministic([origin, 'Jawa Barat', 'Kalimantan Timur', 'Maluku', 'Sulawesi Utara'], idx).slice(0, 4);
+      if (opts.indexOf(origin) === -1) opts[0] = origin;
+      const finalOpts = shuffleDeterministic(opts, idx);
+      return { id, subjectId: 'pancasila', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: finalOpts, correctAnswer: finalOpts.indexOf(origin), explanation: `Warisan etnis "${item}" merupakan identitas kebudayaan daerah ${origin}.` };
     }
   } else if (type === 'isian') {
-    return {
-      id,
-      subjectId: 'pancasila',
-      type: 'isian',
-      topic: 'Semboyan Negara',
-      questionText: `Semboyan nasional negara Republik Indonesia yang memiliki makna berbeda-beda tetapi tetap satu jua adalah Bhinneka Tunggal ...`,
-      correctAnswers: ['ika'],
-      placeholder: 'Ketik satu kata penyambungnya...'
-    };
+    const questions = [
+      ['Sila kesatu burung Garuda Pancasila dilambangkan berbentuk perisai bergambar...', ['bintang']],
+      ['Semboyan kerukunan pemersatu bangsa tercengkeram kaki garuda berbunyi Bhinneka Tunggal...', ['ika']],
+      ['Membantu mencuci piring nampan makan sendiri sehabis sarapan adalah contoh... anak di rumah.', ['kewajiban']],
+      ['Rumah adat Honai jerami melingkar kokoh berasal dari pulau...', ['papua']],
+      ['Kerjasama rukun mengurusi saluran selokan warga tanpa mengharapkan upah harian disebut...', ['gotong royong', 'kerja bakti']]
+    ];
+    const [q, ans] = questions[idx % questions.length];
+    return { id, subjectId: 'pancasila', type: 'isian', topic, questionText: format(q as string, idx), correctAnswers: ans as string[], placeholder: 'Jawab singkat satu kata huruf kecil...' };
   } else if (type === 'menjodohkan') {
-    return {
-      id,
-      subjectId: 'pancasila',
-      type: 'menjodohkan',
-      topic: 'Rumah Adat',
-      questionText: `Pasangkan nama rumah adat terkenal berikut ini dengan provinsi asalnya secara tepat! (Seri ${idx})`,
-      pairs: [
-        { left: 'Rumus Joglo', right: 'Rumah adat khas Provinsi Jawa Tengah' },
-        { left: 'Rumah Gadang', right: 'Rumah adat khas Provinsi Sumatera Barat' },
-        { left: 'Rumah Honai', right: 'Rumah adat khas daerah Papua asli' }
-      ]
-    };
+    const pairs = [
+      { left: 'Sila Ke-1', right: 'Simbol Bintang Emas Gemerlap rukun ibadah' },
+      { left: 'Sila Ke-3', right: 'Simbol Pohon Beringin teduh cinta tanah air' },
+      { left: 'Kewajiban Siswa', right: 'Menyelesaikan piket menyapu lantai kelas tertib' }
+    ];
+    return { id, subjectId: 'pancasila', type: 'menjodohkan', topic, questionText: format(`Harap pasangkan butir Pancasila atau tata krama berikut dengan keterangannya! (Kuis: [IDX])`, idx), pairs };
   } else {
-    // uraian
-    return {
-      id,
-      subjectId: 'pancasila',
-      type: 'uraian',
-      topic: 'Pengamalan Pancasila',
-      questionText: `Sebutkan bunyi sila kedua dari Pancasila, sebutkan lambang sila tersebut, dan berikan dua contoh pengamalannya di kehidupan sehari-hari sekolah!`,
-      sampleAnswer: '1. Bunyi Sila Ke-2: "Kemanusiaan yang adil dan beradab".\n2. Lambang: Rantai emas.\n3. Contoh Pengamalan:\n- Menolong teman kelas yang terjatuh di halaman sekolah.\n- Berbagi bekal makanan dengan teman tanpa membeda-bedakan latar belakang agama/suku.',
-      keywords: ['beradab', 'kemanusiaan', 'rantai', 'menolong', 'teman', 'jatuh', 'adil']
-    };
+    return { id, subjectId: 'pancasila', type: 'uraian', topic, questionText: format(`Mengapa kebiasaan gotong-royong sangat penting dipertahankan di lingkungan tempat tinggal masyarakat rukun? Berikan dua manfaatnya!`, idx), sampleAnswer: `Sebab gotong royong mencerminkan pengamalan sila Persatuan Indonesia gotong royong.\nManfaat nyata:\n1. Meringankan pekerjaan yang berat (seperti pengerukan lumpur got lekas tuntas).\n2. Mempererat tali kerukunan silaturahmi mengobati salah ham paham antar tetangga.`, keywords: ['gotong royong', 'persatuan', 'berat', 'ringan', 'rukun', 'tetangga'] };
   }
 }
 
-// 5. BAHASA INGGRIS GENERATOR
-function generateBahasaInggrisQuestion(id: string, idx: number, type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian', seed: number): Question {
-  const topics = [
-    'Weather Vocabularies', 'Classroom Gear', 'Animal Names', 'Preposition of Place',
-    'Daily Activities', 'Simple Adjectives', 'School Subjects', 'Clothing Items'
-  ];
-  const topic = topics[idx % topics.length];
-
+// 5. BAHASA INGGRIS GENERATOR (Rainy Day and Sunny Day, Weather, Gears, & Activities)
+function generateBahasaInggris(id: string, idx: number, type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian'): Question {
+  const topic = 'Rainy and Sunny Day (English Weather)';
   if (type === 'pilihan_ganda') {
-    const qType = idx % 4;
-    if (qType === 0) {
-      return {
-        id,
-        subjectId: 'bahasa_inggris',
-        type: 'pilihan_ganda',
-        topic: 'Weather Vocabulary',
-        questionText: `It is very hot today. The sun is shining brightly and the sky is blue. What is the weather like today?`,
-        options: [
-          'It is rainy',
-          'It is snowy',
-          'It is sunny',
-          'It is cloudy'
-        ],
-        correctAnswer: 2,
-        explanation: 'When the sun is shining brightly and the climate is hot, it is a "sunny" day.'
-      };
-    } else if (qType === 1) {
-      return {
-        id,
-        subjectId: 'bahasa_inggris',
-        type: 'pilihan_ganda',
-        topic: 'Clothing Weather',
-        questionText: 'If it starts to pour water heavily from the grey clouds (rainy day), we should carry an...',
-        options: [
-          'Umbrella',
-          'Sunglasses',
-          'T-shirt',
-          'Swimsuit'
-        ],
-        correctAnswer: 0,
-        explanation: 'We use an "umbrella" (payung) during a rainy day to avoid getting wet.'
-      };
-    } else if (qType === 2) {
-      return {
-        id,
-        subjectId: 'bahasa_inggris',
-        type: 'pilihan_ganda',
-        topic: 'Animals Vocabulary',
-        questionText: 'Which animal has a very long neck to reach high leaves in the tall trees?',
-        options: [
-          'Monkey',
-          'Elephant',
-          'Giraffe',
-          'Crocodile'
-        ],
-        correctAnswer: 2,
-        explanation: 'A "giraffe" (jerapah) is known for its signature long neck and brown spots.'
-      };
+    const cycle = idx % 4;
+    if (cycle === 0) {
+      // Weather activity gear
+      const items = [
+        ['sun is shining hot and bright', 'sunglasses and beach cap', 'swimming in pool', 'Sunny'],
+        ['heavy water droplets are pouring from dark clouds', 'an umbrella and raincoat', 'watching cartoons inside house', 'Rainy'],
+        ['wind is blowing very hard and rustling dry leaves', 'a windbreaker jacket', 'flying paper kite high', 'Windy'],
+        ['thick white puffy clouds cover the sun completely', 'a comfortable sweater', 'having sweet picnic at park', 'Cloudy']
+      ];
+      const [desc, gear, act, correct] = items[idx % items.length];
+      const q = `Read the trivia scenario!\n"Today in [LOC], [NAME] observes that the ${desc}. They wear ${gear} and can enjoy ${act}."\nWhat is the current weather?`;
+      const opts = ['Sunny', 'Rainy', 'Windy', 'Cloudy'];
+      return { id, subjectId: 'bahasa_inggris', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: opts, correctAnswer: opts.indexOf(correct), explanation: `The physical signs such as "${desc}" specify a "${correct}" day.` };
+    } else if (cycle === 1) {
+      // Prepositions
+      const preps = [
+        ['pencil case', 'top of study desk', 'on', 'di atas'],
+        ['school bag', 'wooden chair under desk', 'under', 'di bawah'],
+        ['English book', 'zipped pocket of bag', 'in', 'di dalam'],
+        ['marker eraser', 'blackboard ledge', 'behind', 'di belakang']
+      ];
+      const [obj, ref, prep, trans] = preps[idx % preps.length];
+      const q = `"Inside [LOC], [NAME] puts the ${obj} **${prep}** the ${ref}."\nIn Indonesian positional terms, what does the word **"${prep}"** mean?`;
+      const opts = shuffleDeterministic(['di atas', 'di bawah', 'di dalam', 'di belakang', 'di samping/sebelah'], idx).slice(0, 4);
+      if (opts.indexOf(trans) === -1) opts[0] = trans;
+      const finalOpts = shuffleDeterministic(opts, idx);
+      return { id, subjectId: 'bahasa_inggris', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: finalOpts, correctAnswer: finalOpts.indexOf(trans), explanation: `The English preposition "${prep}" translates to "${trans}".` };
+    } else if (cycle === 2) {
+      // Animals
+      const animals = [
+        ['has an extremely long patterned neck to eat high leaves', 'Giraffe (Jerapah)'],
+        ['is a giant grey mammal with flat ears and a nose trunk', 'Elephant (Gajah)'],
+        ['is the majestic king of safari decorated with thick furry mane', 'Lion (Singa)'],
+        ['is fluffy with long ears that hops around and loves carrots', 'Rabbit (Kelinci)'],
+        ['shares playful actions swinging on branches and eating bananas', 'Monkey (Monyet)']
+      ];
+      const [info, correct] = animals[idx % animals.length];
+      const q = `"Near [LOC], [NAME] takes a photo of a creature that ${info}."\nIdentify the correct animal name:`;
+      const opts = shuffleDeterministic(['Giraffe (Jerapah)', 'Elephant (Gajah)', 'Lion (Singa)', 'Rabbit (Kelinci)', 'Monkey (Monyet)'], idx).slice(0,4);
+      if (opts.indexOf(correct) === -1) opts[0] = correct;
+      const finalOpts = shuffleDeterministic(opts, idx);
+      return { id, subjectId: 'bahasa_inggris', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: finalOpts, correctAnswer: finalOpts.indexOf(correct), explanation: `The description points directly to "${correct}".` };
     } else {
-      return {
-        id,
-        subjectId: 'bahasa_inggris',
-        type: 'pilihan_ganda',
-        topic: 'Preposition of Place',
-        questionText: 'We sit on top of this object to study in the classroom. What is it?',
-        options: [
-          'A table',
-          'A blackboard',
-          'A chair',
-          'A book'
-        ],
-        correctAnswer: 2,
-        explanation: 'We sit on chairs (kursi) and write on top of desks or tables.'
-      };
+      // Opposite words
+      const words = [
+        ['hot', 'cold', 'sunny park vs ice slushy'],
+        ['big', 'small', 'elephant versus a tiny red ant'],
+        ['happy', 'sad', 'winning games vs dropping ice cream']
+      ];
+      const [word, op, example] = words[idx % words.length];
+      const q = `"What is the antonym (opposite word) of the word **"${word}"** as used in most stories?"`;
+      const opts = shuffleDeterministic([op, 'dry', 'short', 'fast', 'dark'], idx).slice(0, 4);
+      if (opts.indexOf(op) === -1) opts[0] = op;
+      const finalOpts = shuffleDeterministic(opts, idx);
+      return { id, subjectId: 'bahasa_inggris', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: finalOpts, correctAnswer: finalOpts.indexOf(op), explanation: `Adjective opposite: "${word}" opposes "${op}".` };
     }
   } else if (type === 'isian') {
-    return {
-      id,
-      subjectId: 'bahasa_inggris',
-      type: 'isian',
-      topic: 'Simple Translate',
-      questionText: `Translate the color phrase "Apel Merah" into English... (Lowercase only)`,
-      correctAnswers: ['red apple'],
-      placeholder: 'Type in English...'
-    };
+    const questions = [
+      ['What is the opposite English word of "hot" in lowercase?', ['cold']],
+      ['Translate the Indonesian fruit term "Apel Merah" into English in lowercase...', ['red apple']],
+      ['What animal has a long nose trunk and huge fan ears in lowercase?', ['elephant']],
+      ['We bring notebooks and pencils to school inside a school...', ['bag', 'schoolbag']],
+      ['What animal is fluffy, has long ears, and hops around in lowercase?', ['rabbit']]
+    ];
+    const [q, ans] = questions[idx % questions.length];
+    return { id, subjectId: 'bahasa_inggris', type: 'isian', topic, questionText: format(q as string, idx), correctAnswers: ans as string[], placeholder: 'Write your answer in English lowercase...' };
   } else if (type === 'menjodohkan') {
-    return {
-      id,
-      subjectId: 'bahasa_inggris',
-      type: 'menjodohkan',
-      topic: 'Vocabs Matching',
-      questionText: `Match the English animal names with their correct Indonesian translations! (Level ${idx})`,
-      pairs: [
-        { left: 'The Elephant', right: 'Gajah besar belalai' },
-        { left: 'The Lion', right: 'Singa raja rimba' },
-        { left: 'The Rabbit', right: 'Kelinci lompat wortel' }
-      ]
-    };
+    const pairs = [
+      { left: 'Sunny Day', right: 'Wearing sunglasses and swimming pool fun' },
+      { left: 'Rainy Day', right: 'Holding umbrellas and protecting clothes dry' },
+      { left: 'Under desk', right: 'Beneath the wooden surface near study books' }
+    ];
+    return { id, subjectId: 'bahasa_inggris', type: 'menjodohkan', topic, questionText: format(`Match English position/weather terms with their closest descriptions! (No: [IDX])`, idx), pairs };
   } else {
-    // uraian
-    return {
-      id,
-      subjectId: 'bahasa_inggris',
-      type: 'uraian',
-      topic: 'Sentences Making',
-      questionText: `Translate these three simple Indonesian sentences into correct English: "Hari ini hujan", "Saya punya pensil", dan "Kucing adalah seekor hewan"!`,
-      sampleAnswer: 'Translations:\n1. "Hari ini hujan" -> It is rainy today. / It is raining today.\n2. "Saya punya pensil" -> I have a pencil.\n3. "Kucing adalah seekor hewan" -> A cat is an animal. / Cat is an animal.',
-      keywords: ['rainy', 'raining', 'today', 'pencil', 'cat', 'animal']
-    };
+    return { id, subjectId: 'bahasa_inggris', type: 'uraian', topic, questionText: format(`Describe what gear and clothing you should prepare for on a Rainy Day compared to a hot Sunny Day in English!`, idx), sampleAnswer: `On a mud Rainy Day, I should wear a raincoat or hold an umbrella, carry rubber boots, and typically stay cozy indoors. On a hot Sunny Day, I wear light T-shirts, wear sunglasses for eye protection, and enjoy swimming, riding bikes, or playing soccer in the park.`, keywords: ['rainy', 'sunny', 'umbrella', 'raincoat', 'swim', 'outdoor'] };
   }
 }
 
-// 6. PAI GENERATOR
-function generatePaiQuestion(id: string, idx: number, type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian', seed: number): Question {
-  const topics = [
-    'Asmaul Husna', 'Adab Islam', 'Kisah Para Nabi', 'Surat Al-Maun',
-    'Rukun Iman', 'Rukun Islam', 'Zakat & Haji', 'Wudhu Sempurna'
-  ];
-  const topic = topics[idx % topics.length];
-
+// 6. PAI GENERATOR (Agama Islam: Adab Salam, Tolong-Menolong QS. Al-Maidah: 2, Munafik)
+function generatePai(id: string, idx: number, type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian'): Question {
+  const topic = 'PAI (Adab Salam, Tolong-Menolong, Munafik)';
   if (type === 'pilihan_ganda') {
-    const qType = idx % 4;
-    if (qType === 0) {
-      return {
-        id,
-        subjectId: 'pai',
-        type: 'pilihan_ganda',
-        topic: 'Asmaul Husna',
-        questionText: `Asmaul Husna "Ar-Rahim" memiliki arti yang luhur yaitu Allah Yang Maha...`,
-        options: [
-          'Maha Pengasih',
-          'Maha Penyayang',
-          'Maha Merajai',
-          'Maha Suci'
-        ],
-        correctAnswer: 1,
-        explanation: 'Ar-Rahman berarti Maha Pengasih kepada semua makhluk. Ar-Rahim berarti Maha Penyayang bagi orang-orang mukmin.'
-      };
-    } else if (qType === 1) {
-      return {
-        id,
-        subjectId: 'pai',
-        type: 'pilihan_ganda',
-        topic: 'Adab Mengucapkan Salam',
-        questionText: 'Bila bertemu sesama Muslim di jalan, hukum asal memulai mengucapkan salam adalah sunnah muakkadah, sedangkan hukum bagi yang menjawab salam tersebut adalah...',
-        options: [
-          'Makruh',
-          'Mubah bebas',
-          'Wajib (Fardhu)',
-          'Sunnah'
-        ],
-        correctAnswer: 2,
-        explanation: 'Hukum memulai salam adalah sunnah, namun menjawab ucapan salam dari saudara Muslim adalah wajib hukumnya.'
-      };
-    } else if (qType === 2) {
-      return {
-        id,
-        subjectId: 'pai',
-        type: 'pilihan_ganda',
-        topic: 'Adab Sifat Munafik',
-        questionText: 'Berdasarkan sabda Nabi Muhammad SAW, tanda orang munafik ada tiga perkara. Salah satunya jika dipercaya dia...',
-        options: [
-          'Dusta berbohong',
-          'Ingkar janji',
-          'Khianat membocorkan',
-          'Marah-marah'
-        ],
-        correctAnswer: 2,
-        explanation: 'Hadis nabi: "Ayatul munafiqi salatsun: idza haddatsa kadzaba, wa idza wa\'ada akhlafa, wa idza\'-tumina khana" (Jika berkata dusta, jika berjanji ingkar, jika dipercaya khianat).'
-      };
+    const cycle = idx % 4;
+    if (cycle === 0) {
+      // QS Al Maidah 2
+      const forbids = [
+        ['bekerjasama saling mengajari jawaban waktu ujian tertib di [LOC]', 'Dosa dan permusuhan', true],
+        ['tolong-menolong membongkar jemuran mangga kebun tetangga tanpa izin', 'Dosa dan permusuhan', true],
+        ['membantu membagikan koin jajan diringankan membeli obat kawan sakit', 'Kebajikan dan takwa', false],
+        ['menolong nenek merapikan barang runtuh terbawa banjir deras', 'Kebajikan dan takwa', false]
+      ];
+      const [act, rule, isForbidden] = forbids[idx % forbids.length];
+      const q = isForbidden 
+        ? `Tindakan buruk berkongkalikong yaitu: ${act}. Kegiatan ini haram karena melanggar QS. Al-Maidah Ayat 2 mufakat dilarang dalam hal...`
+        : `Tindakan terpuji: ${act}. Bentuk tolong-menolong luhur ini sangat dinilai mulia oleh QS. Al-Maidah Ayat 2 yaitu dalam...`;
+      const opts = ['Kebajikan dan takwa', 'Dosa dan permusuhan', 'Menimbun kasta dunia', 'Kekayaan duniawi'];
+      return { id, subjectId: 'pai', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: opts, correctAnswer: opts.indexOf(rule as string), explanation: `QS. Al-Maidah ayat 2 melancarkan titah tolong-menolong dalam hal kebajikan silih takwa, dan mematikan aksi dosa permusuhan.` };
+    } else if (cycle === 1) {
+      // Adab Salam
+      const qTypes = [
+        ['Siti menyapa teman sehobi memulai mengucap salam "Assalamu\'alaikum" di [LOC]. Hukum memulai salam adalah...', 'Sunnah Muakkad (sangat dianjurkan)'],
+        ['Budi mendengar [NAME] melafalkan ucapan salam di depan kelas. Hukum menjawab salam tersebut adalah...', 'Fardhu/Wajib (bagi yang mendengar)']
+      ];
+      const [text, ans] = qTypes[idx % qTypes.length];
+      const opts = ['Sunnah Muakkad (sangat dianjurkan)', 'Fardhu/Wajib (bagi yang mendengar)', 'Mubah saja', 'Makruh dibenci'];
+      return { id, subjectId: 'pai', type: 'pilihan_ganda', topic, questionText: format(text, idx), options: opts, correctAnswer: opts.indexOf(ans), explanation: `Memulai mengucap salam bernilai sunnah muakkad, sedangkan menjawab doa kawan tersebut hukumnya wajib.` };
+    } else if (cycle === 2) {
+      // Munafik
+      const traits = [
+        ['gemar menceritakan kepalsuan bohong agar dielu-elukan', 'Berkata bohong / Dusta (Kadzaba)'],
+        ['menyanggupi janji membawakan cat pewarna mading besok pagi tapi melupakannya sengaja', 'Ingkar Janji (Akhlafa)'],
+        ['dipercaya memegang uang iuran piket tapi dipakai diam-diam buat pribadi', 'Khianat bila Dipercaya (Khana)']
+      ];
+      const [desc, correct] = traits[idx % traits.length];
+      const q = `Nabi bersabda bahwa ciri kaum nifaq/munafik itu ada tiga. Tindakan seseorang di [LOC] yang ${desc} melambangkan ciri...`;
+      const opts = ['Berkata bohong / Dusta (Kadzaba)', 'Ingkar Janji (Akhlafa)', 'Khianat bila Dipercaya (Khana)', 'Suka bertengkar riya memecah'];
+      return { id, subjectId: 'pai', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: opts, correctAnswer: opts.indexOf(correct), explanation: `Hadis menceritakan tanda munafik: dusta, ingkar, khianat. Perilaku ini mewakili "${correct}".` };
     } else {
-      return {
-        id,
-        subjectId: 'pai',
-        type: 'pilihan_ganda',
-        topic: 'Rukun Iman',
-        questionText: 'Mempercayai bahwa hari kiamat/akhir zaman pasti akan terjadi menghancurkan seluruh jagat raya adalah rukun iman ke-...',
-        options: [
-          'Tiga (3)',
-          'Empat (4)',
-          'Lima (5)',
-          'Enam (6)'
-        ],
-        correctAnswer: 2,
-        explanation: 'Rukun iman ke-5 adalah beriman kepada Hari Akhir (Kiamat).'
-      };
+      // Ar Rahman Rahim
+      const asmaul = [
+        ['Ar-Rahman', 'Maha Pengasih bagi seluruh makhluk hidup di dunia tanpa terkecuali'],
+        ['Ar-Rahim', 'Maha Penyayang khusus bagi hamba-hambaNya yang beriman taat di akhirat']
+      ];
+      const [name, trans] = asmaul[idx % asmaul.length];
+      const q = `Bidang tauhid aqidah mempelajari asma Allah, khususnya: **${name}**. Sifat mulia agung ini artinya Allah Maha...`;
+      const opts = [
+        'Maha Pengasih bagi seluruh makhluk hidup di dunia tanpa terkecuali',
+        'Maha Penyayang khusus bagi hamba-hambaNya yang beriman taat di akhirat',
+        'Maha Berkuasa menciptakan lautan jagad semesata raya',
+        'Maha Mengoreksi segala kelenggangan dosa makhluk'
+      ];
+      return { id, subjectId: 'pai', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: opts, correctAnswer: opts.indexOf(trans), explanation: `${name} bertafsir luhur asali: ${trans}` };
     }
   } else if (type === 'isian') {
-    return {
-      id,
-      subjectId: 'pai',
-      type: 'isian',
-      topic: 'Kisah Nabi Nuh',
-      questionText: `Nabi yang diperintahkan oleh Allah membuat sebuah bahtera (kapal besar) untuk menghindari banjir dahsyat yang menyapu kaum ingkar adalah Nabi ... AS.`,
-      correctAnswers: ['nuh'],
-      placeholder: 'Ketik nama nabinya saja...'
-    };
+    const questions = [
+      ['Lawan perilaku jujur bercakap adil (tidak munafik) adalah berkata...', ['dusta', 'bohong']],
+      ['Asmaul Husna "Ar-Rahim" mengakar arti agung bahwa Allah Maha...', ['penyayang']],
+      ['Hukum memulai salam keselamatan saat bertemu guru di koridor [LOC] adalah...', ['sunnah']],
+      ['Hukum membalas salam tatkala telinga mendengar titian assalamualaikum kawan di [LOC] adalah...', ['wajib', 'fardhu']]
+    ];
+    const [q, ans] = questions[idx % questions.length];
+    return { id, subjectId: 'pai', type: 'isian', topic, questionText: format(q as string, idx), correctAnswers: ans as string[], placeholder: 'Ketik satu kata huruf kecil saja...' };
   } else if (type === 'menjodohkan') {
-    return {
-      id,
-      subjectId: 'pai',
-      type: 'menjodohkan',
-      topic: 'Rukun Islam & Iman',
-      questionText: `Pasangkan nomor/angka rukun Islam berikut dengan ibadahnya yang sesuai! (Sesi Ke-${idx})`,
-      pairs: [
-        { left: 'Rukun Islam Ke-1', right: 'Mengucapkan Dua Kalimat Syahadat' },
-        { left: 'Rukun Islam Ke-2', right: 'Mendirikan Shalat Fardhu Lima Waktu' },
-        { left: 'Rukun Islam Ke-3', right: 'Membayar Zakat bila mampu' }
-      ]
-    };
+    const pairs = [
+      { left: 'Tolong Menolong Baik', right: 'Membantu tetangga terjangkit pohon tumbang di jalan' },
+      { left: 'Dilarang Saling Bantu', right: 'Saling menyontek ketika ulangan kelas dilarang' },
+      { left: 'Ciri Munafik', right: 'Bila berbicara hobi berdusta menyembunyikan kenyataan' }
+    ];
+    return { id, subjectId: 'pai', type: 'menjodohkan', topic, questionText: format(`Harap pasangkan prinsip adab Islami berikut dengan contoh riil nyata! (No: [IDX])`, idx), pairs };
   } else {
-    // uraian
-    return {
-      id,
-      subjectId: 'pai',
-      type: 'uraian',
-      topic: 'Akhlak Terpuji',
-      questionText: `Sebutkan tiga cara berbakti (birrul walidain) kepada kedua orang tua kita selagi mereka masih hidup sehat!`,
-      sampleAnswer: 'Tiga cara berbakti kepada orang tua yaitu:\n1. Berbicara dengan lemah lembut dan sopan tanpa membentak.\n2. Patuh dan taat melaksanakan perintah kebaikan mereka.\n3. Membantu pekerjaan rumah secara ikhlas serta mendoakan kebaikan keselamatan mereka setiap selesai shalat fardhu.',
-      keywords: ['patuh', 'lemah lembut', 'membantu', 'ibu', 'bapak', 'mendoakan', 'sopan']
-    };
+    return { id, subjectId: 'pai', type: 'uraian', topic, questionText: format(`Sebutkan 3 macam tanda-tanda kemunafikan (nifaq) berdasarkan sabda mulia hadis Nabi SAW!`, idx), sampleAnswer: `Sesuai hadis Bukhari Muslim, tanda orang munafik ada tiga:\n1. Apabila berbicara, ia gemar berdusta (bohong).\n2. Apabila berjanji, ia mengingkari janjinya.\n3. Apabila dipercayai amanah, ia justru khianat menyalahgunakan kepercayaan.`, keywords: ['dusta', 'bohong', 'ingkar', 'janji', 'khianat', 'amanah', 'munafik'] };
   }
 }
 
-// 7. BAHASA ARAB GENERATOR
-function generateBahasaArabQuestion(id: string, idx: number, type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian', seed: number): Question {
-  const topics = [
-    'Nama Binatang (Hayawanat)', 'Nama Pelajaran (Daras)', 'Angka 1 s.d. 10', 'Benda di Kelas',
-    'Anggota Tubuh', 'Warna Alwan', 'Kosakata Anggota Keluarga'
-  ];
-  const topic = topics[idx % topics.length];
-
+// 7. BAHASA ARAB GENERATOR (Nama Pelajaran & Nama Binatang)
+function generateBahasaArab(id: string, idx: number, type: 'pilihan_ganda' | 'isian' | 'menjodohkan' | 'uraian'): Question {
+  const topic = 'Bahasa Arab (Asmaud Daras & Hayawanat)';
   if (type === 'pilihan_ganda') {
-    const qType = idx % 4;
-    if (qType === 0) {
-      return {
-        id,
-        subjectId: 'bahasa_arab',
-        type: 'pilihan_ganda',
-        topic: 'Asma Hayawan',
-        questionText: `Hewan bertubuh besar dengan belalai panjang dan telinga lebar yang memiliki lafaz bahasa arab "فِيْلٌ" (Fiilun) adalah...`,
-        options: [
-          'Kucing imut',
-          'Unta padang pasir',
-          'Singa galak',
-          'Gajah besar'
-        ],
-        correctAnswer: 3,
-        explanation: 'Al-Filu / Fiilun (فيل) dalam bahasa Indonesia berarti gajah (sebagaimana kisahnya di Surah Al-Fil).'
-      };
-    } else if (qType === 1) {
-      return {
-        id,
-        subjectId: 'bahasa_arab',
-        type: 'pilihan_ganda',
-        topic: 'Asmaud Daras',
-        questionText: 'Pelajaran berhitung angka yang di dalam kamus bahasa arab disebut "عِلْمُ الْحِسَابِ" (Ilmul Hisabi) adalah...',
-        options: [
-          'Pelajaran Sejarah',
-          'Pelajaran Seni Budaya',
-          'Pelajaran Matematika',
-          'Pelajaran Fikih Agama'
-        ],
-        correctAnswer: 2,
-        explanation: 'Darsul Hisab (الحساب) mengacu pada ilmu berhitung atau pelajaran Matematika.'
-      };
-    } else if (qType === 2) {
-      return {
-        id,
-        subjectId: 'bahasa_arab',
-        type: 'pilihan_ganda',
-        topic: 'Asyaul Fasli',
-        questionText: 'Siswa menulis kalimat latihan di papan tulis menggunakan kapur atau spidol. Lafal arab "قَلَمٌ" (Qalamun) berarti...',
-        options: [
-          'Kursi kayu',
-          'Pena/Spidol/Pensil tulis',
-          'Penghapus tulis',
-          'Buku tulis tebal'
-        ],
-        correctAnswer: 1,
-        explanation: 'Qalamun (قلم) berarti pena, alat tulis yang digunakan untuk mencatat pelajaran.'
-      };
+    const cycle = idx % 4;
+    if (cycle === 0) {
+      // Pelajaran
+      const lessons = [
+        ['Matematika', 'دَرْسُ الْحِسَابِ (Darsul Hisab)', 'Al-Hisab berarti matematika ilmu hitung'],
+        ['Bahasa Arab', 'دَرْسُ اللُّغَةِ الْعَرَبِيَّةِ (Darsul Lughatul Arabiyyah)', 'Bahasa Arab adalah bahasa pemahaman rukun Qur\'an'],
+        ['Bahasa Inggris', 'دَرْسُ اللُّغَةِ الْإِنْجِلِيْزِيَّةِ (Darsul Lughatul Injiliziyyah)', 'Bahasa Inggris adalah studi global komunikasi barat']
+      ];
+      const [ind, ar, exp] = lessons[idx % lessons.length];
+      const q = `Hari ini [NAME] dijadwal memelajari bidang studi: **${ind}** di [LOC]. Kitab tertulis Arab judul materi tersebut adalah...`;
+      const opts = shuffleDeterministic([ar, 'دَرْسُ الْحِسَابِ (Darsul Hisab)', 'دَرْسُ اللُّغَةِ الْعَرَبِيَّةِ (Darsul Lughatul Arabiyyah)', 'دَرْسُ اللُّغَةِ الْإِنْجِلِيْزِيَّةِ (Darsul Lughatul Injiliziyyah)', 'دَرْسُ الْعَقِيْدَةِ (Darsul Aqidah)'].filter((v, i, a) => a.indexOf(v) === i), idx).slice(0, 4);
+      if (opts.indexOf(ar) === -1) opts[0] = ar;
+      const finalOpts = shuffleDeterministic(opts, idx);
+      return { id, subjectId: 'bahasa_arab', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: finalOpts, correctAnswer: finalOpts.indexOf(ar), explanation: `Bidang "${ind}" tertulis Arab yaitu ${ar} (${exp}).` };
+    } else if (cycle === 1) {
+      // Binatang
+      const animals = [
+        ['gajah berkuping besar belalai panjang', 'فِيْلٌ (Fiilun)', 'Fiilun beralih makna gajah'],
+        ['singa taring liar gagah raja hutan', 'أَسَدٌ (Asadun)', 'Asadun menterjemahkan hewan singa buas'],
+        ['kucing berbulu manis suka mengeong', 'قِطٌّ (Qittun)', 'Qittun bermakna hewan kucing'],
+        ['unta kuat punuk penyimpan air gurun', 'جَمَلٌ (Jamalun)', 'Jamalun menterjemahkan unta']
+      ];
+      const [desc, ar, exp] = animals[idx % animals.length];
+      const q = `Saat bertamasya rukun melihat lukisan hewan ${desc} di [LOC], [NAME] memelajari bahasa Arabnya dari kamus, yaitu...`;
+      const opts = shuffleDeterministic([ar, 'فِيْلٌ (Fiilun)', 'أَسَدٌ (Asadun)', 'قِطٌّ (Qittun)', 'جَمَلٌ (Jamalun)', 'غَنَمٌ (Ghanamun)'].filter((v, i, a) => a.indexOf(v) === i), idx).slice(0, 4);
+      if (opts.indexOf(ar) === -1) opts[0] = ar;
+      const finalOpts = shuffleDeterministic(opts, idx);
+      return { id, subjectId: 'bahasa_arab', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: finalOpts, correctAnswer: finalOpts.indexOf(ar), explanation: `Hewan "${desc}" dalam bahasa Arab disebut ${ar}.` };
+    } else if (cycle === 2) {
+      // Benda Kelas
+      const items = [
+        ['pena tulis tinta runcing', 'قَلَمٌ (Qalamun)'],
+        ['meja kayu laci beralas datar', 'مَكْتَبٌ (Maktabun)'],
+        ['kursi sandaran sandar kayu murni', 'كُرْسِيٌّ (Kursiyyun)'],
+        ['buku kertas lembaran jilid tebal', 'كِتَابٌ (Kitabun)']
+      ];
+      const [desc, ar] = items[idx % items.length];
+      const q = `Di dalam loker meja di [LOC], [NAME] meletakkan perkakas: ${desc}. Apa kosakata Arab dari benda tersebut?`;
+      const opts = shuffleDeterministic([ar, 'قَلَمٌ (Qalamun)', 'مَكْتَبٌ (Maktabun)', 'كُرْسِيٌّ (Kursiyyun)', 'كِتَابٌ (Kitabun)', 'حَقِيْبَةٌ (Haqiibatun)'].filter((v, i, a) => a.indexOf(v) === i), idx).slice(0, 4);
+      if (opts.indexOf(ar) === -1) opts[0] = ar;
+      const finalOpts = shuffleDeterministic(opts, idx);
+      return { id, subjectId: 'bahasa_arab', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: finalOpts, correctAnswer: finalOpts.indexOf(ar), explanation: `Benda "${desc}" sewajarnya tertulis Arab sebagai ${ar}.` };
     } else {
-      return {
-        id,
-        subjectId: 'bahasa_arab',
-        type: 'pilihan_ganda',
-        topic: 'Warna-warna',
-        questionText: 'Warna bendera suci Indonesia merah-putih. Bahasa arab dari warna merah cerah, yaitu...',
-        options: [
-          'Abyadh',
-          'Ahmar',
-          'Azraq',
-          'Aswad'
-        ],
-        correctAnswer: 1,
-        explanation: 'Ahmar (أحمر) bermakna merah, sedangkan Abyadh bermakna putih.'
-      };
+      // Organ Tubuh / Warna
+      const parts = [
+        ['mata melihat membaca', 'عَيْنٌ (Ainun)', 'Ainun bermakna mata'],
+        ['hidung membau penciuman', 'أَنْفٌ (Anfun)', 'Anfun bermakna hidung'],
+        ['tangan memegang pinsil cat', 'يَدٌ (Yadun)', 'Yadun bermakna tangan'],
+        ['kepala beralas rambut hitam', 'رَأْسٌ (Rasun)', 'Rasun bermakna kepala']
+      ];
+      const [desc, ar, exp] = parts[idx % parts.length];
+      const q = `Sambil menunjuk ke organ badannya: **${desc}**, [NAME] mengucapkan hafalan kosakata Arab rukun di [LOC], yaitu...`;
+      const opts = shuffleDeterministic([ar, 'عَيْنٌ (Ainun)', 'أَنْفٌ (Anfun)', 'يَدٌ (Yadun)', 'رَأْسٌ (Rasun)', 'رِجْلٌ (Rijlun)'].filter((v, i, a) => a.indexOf(v) === i), idx).slice(0, 4);
+      if (opts.indexOf(ar) === -1) opts[0] = ar;
+      const finalOpts = shuffleDeterministic(opts, idx);
+      return { id, subjectId: 'bahasa_arab', type: 'pilihan_ganda', topic, questionText: format(q, idx), options: finalOpts, correctAnswer: finalOpts.indexOf(ar), explanation: `Organ "${desc}" bahasa Arab aslinya: ${ar} (${exp}).` };
     }
   } else if (type === 'isian') {
-    return {
-      id,
-      subjectId: 'bahasa_arab',
-      type: 'isian',
-      topic: 'Angka Arab',
-      questionText: `Angka arab "وَاحِدٌ" (Wahidun) memiliki padanan angka numerik dalam matematika yaitu angka ... (ketik dalam bentuk angka saja)`,
-      correctAnswers: ['1', 'satu'],
-      placeholder: 'Ketik angkanya...'
-    };
+    const questions = [
+      ['Bilangan hitung numerik Arab latin untuk melambangkan angka kesatu (1) adalah...', ['wahid', 'wahidun']],
+      ['Bilangan hitung numerik Arab latin untuk melambangkan angka kedua (2) adalah...', ['itsnan', 'itsnani']],
+      ['Lafal Arab murni latin dari perkakas beralas datar "Meja" belajar sekolah adalah...', ['maktab', 'maktabun']],
+      ['Lafal Arab murni latin dari perkakas bersandaran kaku tempat siswa "Kursi" duduk di [LOC] adalah...', ['kursi', 'kursiyyun']],
+      ['Hewan mengeong lucu peliharaan "Kucing" berbulu halus di [LOC] kamus Arab bersuara kata...', ['qit', 'qittun']]
+    ];
+    const [q, ans] = questions[idx % questions.length];
+    return { id, subjectId: 'bahasa_arab', type: 'isian', topic, questionText: format(q as string, idx), correctAnswers: ans as string[], placeholder: 'Lafalkan tulis latin arab huruf kecil saja...' };
   } else if (type === 'menjodohkan') {
-    return {
-      id,
-      subjectId: 'bahasa_arab',
-      type: 'menjodohkan',
-      topic: 'A\'dhaul Jism',
-      questionText: `Jodohkan istilah arab anggota tubuh berikut ini dengan terjemahannya yang benar! (Seri ${idx})`,
-      pairs: [
-        { left: 'أَنْفٌ (Anfun)', right: 'Organ Hidung penciuman' },
-        { left: 'عَيْنٌ (Ainun)', right: 'Organ Mata penglihatan' },
-        { left: 'رَأْسٌ (Ra\'sun)', right: 'Anggota Kepala rambut' }
-      ]
-    };
+    const pairs = [
+      { left: 'فِيْلٌ (Fiilun)', right: 'Gajah kuping besar berbelalai panjang' },
+      { left: 'أَسَدٌ (Asadun)', right: 'Singa taring tajam penguasa hutan rimba' },
+      { left: 'قَلَمٌ (Qalamun)', right: 'Pena runcing isi tinta goresan tulis' }
+    ];
+    return { id, subjectId: 'bahasa_arab', type: 'menjodohkan', topic, questionText: format(`Harap jodohkan muatan latin kosa kata bahasa Arab berikut dengan artinya yang adil! (No: [IDX])`, idx), pairs };
   } else {
-    // uraian
-    return {
-      id,
-      subjectId: 'bahasa_arab',
-      type: 'uraian',
-      topic: 'Vocabs Translate',
-      questionText: `Terjemahkan istilah-istilah di ruang kelas berikut dari bahasa Indonesia ke dalam kata bahasa Arab latin atau arab asli: "Meja", "Kursi", dan "Buku"!`,
-      sampleAnswer: 'Terjemahan kata:\n1. "Meja" -> Maktabun (مَكْتَبٌ)\n2. "Kursi" -> Kursiyyun (كُرْسِيٌّ)\n3. "Buku" -> Kitabun (كِتَابٌ)',
-      keywords: ['maktab', 'kursi', 'kitab', 'مكتب', 'كرسي', 'كتاب']
-    };
+    return { id, subjectId: 'bahasa_arab', type: 'uraian', topic, questionText: format(`Sebutkan tiga nama benda perkakas sekolah di dalam kelas (Adawatun Madrasiyyah) menggunakan lafal Arab latin beserta arti kegunaannya secara patut!`, idx), sampleAnswer: `Tiga perkakas kelas:\n1. Qalamun (قَلَمٌ): Artinya pena/pulpen, gunanya untuk mencatat huruf di buku tulis.\n2. Maktabun (مَكْتَبٌ): Artinya meja, gunanya untuk beralas menulis menyandarkan buku.\n3. Kursiyyun (كُرْسِيٌّ): Artinya kursi, gunanya untuk mendudukan jasad siswa secara rukun tertib.`, keywords: ['qalam', 'maktab', 'kursi', 'pena', 'meja', 'kursi', 'tulis'] };
   }
 }

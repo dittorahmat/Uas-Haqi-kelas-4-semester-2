@@ -2164,10 +2164,135 @@ const STATIC_QUESTION_POOL: Question[] = [
   }
 ];
 
+// Subject specific distractors for converting fill-in questions to multiple-choice
+const SUBJECT_DISTRACTORS: { [key: string]: string[] } = {
+  ipas: ['Organik', 'Anorganik', 'B3 (Berbahaya)', 'Reduce', 'Reuse', 'Recycle', 'Penghijauan', 'Reboisasi', 'Evaporasi', 'Kondensasi', 'Konduksi', 'Konveksi', 'Radiasi', 'Mencair', 'Membeku', 'Menguap', 'Menyublim', 'Mengembun', 'Gaya Gesek', 'Gaya Magnet', 'Gaya Gravitasi', 'Produsen', 'Konsumen I', 'Konsumen II', 'Pengurai'],
+  matematika: ['Persegi', 'Siku-siku', 'Lurus', 'Lancip', 'Tumpul', 'Persegi Panjang', 'Segitiga Sisi', 'Trapesium', 'Aritmatika', 'Piktogram', 'Diagram Batang', 'Sumbu Simetri', 'Diagonal', 'Keliling', 'Luas', '10', '180', '90', '360'],
+  bahasa_indonesia: ['Fakta', 'Opini', 'Watak', 'Protagonis', 'Antagonis', 'Latar', 'Alur', 'Majas', 'Personifikasi', 'Metafora', 'Hiperbola', 'Sinonim', 'Antonim', 'Hemat', 'Boros', 'Disiplin', 'Pemalas'],
+  pancasila: ['Hak', 'Kewajiban', 'Gotong Royong', 'Kerjasama', 'Bintang', 'Rantai', 'Beringin', 'Banteng', 'Padi dan Kapas', 'Bhinneka', 'Tunggal Ika', 'Honai', 'Saman', 'Kecak', 'Gadang', 'Sasando'],
+  bahasa_inggris: ['Sunny', 'Rainy', 'Cloudy', 'Cold', 'Hot', 'Under', 'On', 'In', 'Behind', 'Elephant', 'Rabbit', 'Giraffe', 'Bag', 'Reading', 'Writing', 'Dry', 'Wet'],
+  pai: ['Wajib', 'Sunnah', 'Haram', 'Makruh', 'Dusta', 'Khianat', 'Jujur', 'Bohong', 'Penyayang', 'Pengasih', 'Ar-Rahman', 'Ar-Rahim', 'Munafik', 'Akhlak', 'Aqidah', 'Salam'],
+  bahasa_arab: ['Matematika', 'Bahasa Arab', 'Fikih', 'Kucing', 'Sapi', 'Kelinci', 'Gajah', 'Kuda', 'Singa', 'Pena', 'Meja', 'Kursi', 'Buku', 'Mata', 'Hidung', 'Tangan', 'Kepala']
+};
+
+export function convertToMultipleChoice(q: Question, seedIndex: number = 0): MultipleChoiceQuestion {
+  if (q.type === 'pilihan_ganda') {
+    return q as MultipleChoiceQuestion;
+  }
+
+  const base: any = {
+    id: q.id,
+    subjectId: q.subjectId,
+    type: 'pilihan_ganda',
+    topic: q.topic || 'Pilihan Ganda',
+    questionText: q.questionText,
+    explanation: q.explanation || 'Jawaban yang benar ditentukan dari materi pelajaran.'
+  };
+
+  if (q.type === 'isian') {
+    const isian = q as FillInQuestion;
+    const correct = isian.correctAnswers[0];
+    const correctOpt = correct.charAt(0).toUpperCase() + correct.slice(1);
+    
+    // Select distractors from SUBJECT_DISTRACTORS
+    const pool = SUBJECT_DISTRACTORS[q.subjectId] || [];
+    const filteredPool = pool.filter(item => 
+      item.toLowerCase() !== correct.toLowerCase() && 
+      item.toLowerCase() !== correctOpt.toLowerCase()
+    );
+    
+    // Deterministic selection based on seedIndex or length of questionText to make it predictable
+    const seed = q.questionText.length + seedIndex;
+    const shuffledPool = [...filteredPool];
+    for (let i = shuffledPool.length - 1; i > 0; i--) {
+      const j = Math.abs(seed * (i + 7) + 13) % (i + 1);
+      const temp = shuffledPool[i];
+      shuffledPool[i] = shuffledPool[j];
+      shuffledPool[j] = temp;
+    }
+    
+    const distractors = shuffledPool.slice(0, 3);
+    const options = [correctOpt, ...distractors];
+    
+    // Shuffle the final options deterministically
+    const finalOptions = [...options];
+    for (let i = finalOptions.length - 1; i > 0; i--) {
+      const j = Math.abs((seed + 5) * (i + 3) + 7) % (i + 1);
+      const temp = finalOptions[i];
+      finalOptions[i] = finalOptions[j];
+      finalOptions[j] = temp;
+    }
+
+    base.options = finalOptions;
+    base.correctAnswer = finalOptions.indexOf(correctOpt);
+    if (base.correctAnswer === -1) {
+      base.correctAnswer = 0;
+      base.options[0] = correctOpt;
+    }
+    return base as MultipleChoiceQuestion;
+  }
+
+  if (q.type === 'menjodohkan') {
+    const matching = q as MatchingQuestion;
+    const targetPair = matching.pairs[0];
+    
+    base.questionText = `${matching.questionText.replace('Jodohkanlah ', '').replace('Jodohkan ', '').replace('Pasangkanlah ', '').replace('Pasangkan ', '')}\n\nPasangan yang paling TEPAT untuk **"${targetPair.left}"** adalah...`;
+    
+    const correctOpt = targetPair.right;
+    const otherRights = matching.pairs.slice(1).map(p => p.right);
+    
+    const pool = SUBJECT_DISTRACTORS[q.subjectId] || [];
+    const extraDistractors = pool.filter(item => 
+      item.toLowerCase() !== correctOpt.toLowerCase() &&
+      !otherRights.some(r => r.toLowerCase() === item.toLowerCase())
+    );
+
+    const distractors = [...otherRights, ...extraDistractors].slice(0, 3);
+    const options = [correctOpt, ...distractors];
+    
+    // Shuffle deterministic
+    const seed = q.questionText.length + seedIndex;
+    const finalOptions = [...options];
+    for (let i = finalOptions.length - 1; i > 0; i--) {
+      const j = Math.abs((seed + 9) * (i + 2) + 11) % (i + 1);
+      const temp = finalOptions[i];
+      finalOptions[i] = finalOptions[j];
+      finalOptions[j] = temp;
+    }
+
+    base.options = finalOptions;
+    base.correctAnswer = finalOptions.indexOf(correctOpt);
+    if (base.correctAnswer === -1) {
+      base.correctAnswer = 0;
+      base.options[0] = correctOpt;
+    }
+    return base as MultipleChoiceQuestion;
+  }
+
+  // Treat 'uraian' (essays) similarly or filter them out in build process.
+  // As a fallback converter for essays:
+  const essay = q as EssayQuestion;
+  const correctOpt = essay.sampleAnswer.split('\n')[0].replace(/^\d+[\.\)]\s*/, '') || 'Kunci jawaban yang direkomendasikan.';
+  base.questionText = q.questionText;
+  base.options = [
+    correctOpt,
+    'Kurang tepat karena tidak sesuai dengan topik yang dibahas.',
+    'Pernyataan yang bertentangan dengan jawaban ilmiah.',
+    'Jawaban acak tidak relevan.'
+  ];
+  base.correctAnswer = 0;
+  return base as MultipleChoiceQuestion;
+}
+
+// Convert all static pool questions except essays to multiple-choice
+const CONVERTED_STATIC_POOL = STATIC_QUESTION_POOL
+  .filter(q => q.type !== 'uraian')
+  .map((q, idx) => convertToMultipleChoice(q, idx));
+
 // Append generated questions for each subject to reach exactly 140 questions per subject
 const extraQuestions: Question[] = [];
 SUBJECTS.forEach((subject) => {
-  const currentCount = STATIC_QUESTION_POOL.filter(q => q.subjectId === subject.id).length;
+  const currentCount = CONVERTED_STATIC_POOL.filter(q => q.subjectId === subject.id).length;
   const targetCount = 140;
   if (currentCount < targetCount) {
     const needed = targetCount - currentCount;
@@ -2176,6 +2301,6 @@ SUBJECTS.forEach((subject) => {
 });
 
 export const QUESTION_POOL: Question[] = [
-  ...STATIC_QUESTION_POOL,
+  ...CONVERTED_STATIC_POOL,
   ...extraQuestions
 ];
